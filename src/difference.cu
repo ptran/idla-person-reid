@@ -1,139 +1,191 @@
-#include <dlib/dnn/cuda_utils>
+#include "difference.h"
 
-// ---------------------------------------------------------------------------
+#include <dlib/dnn/cuda_utils.h>
 
-__global__ void idla::impl::applying_forward_differencing(
-    const float* input_tensor,
-    float* output_tensor,
-    long in_nk,
-    long in_nr,
-    long in_nc,
-    long nbhd_nr,
-    long nbhd_nc,
-    long n
-)
+
+// =========================================================================== //
+//                            IMPLEMENTATION                                   //
+// =========================================================================== //
+
+namespace
 {
-    for (auto i : dlib::grid_stride_range(0, n))
+    __global__ void apply_forward_differencing_impl(
+        const float* input_tensor,
+        float* output_tensor,
+        long in_nk,
+        long in_nr,
+        long in_nc,
+        long nbhd_nr,
+        long nbhd_nc,
+        long n
+    )
     {
-        // Find neighborhood indices
-        long nbhd_c = i/nbhd_nc % in_nc;               // also center column
-        long nbhd_r = i/nbhd_nc/in_nc/nbhd_nr % in_nr; // also center row
-        long k = i/nbhd_nc/in_nc/nbhd_nr/in_nr % in_nk;
-        long sample = i/nbhd_nc/in_nc/nbhd_nr/in_nr/in_nk;
+        for (auto i : dlib::grid_stride_range(0, n))
+        {
+            // Find neighborhood indices
+            long nbhd_c = i/nbhd_nc % in_nc;               // also center column
+            long nbhd_r = i/nbhd_nc/in_nc/nbhd_nr % in_nr; // also center row
+            long k = i/nbhd_nc/in_nc/nbhd_nr/in_nr % in_nk;
+            long sample = i/nbhd_nc/in_nc/nbhd_nr/in_nr/in_nk;
 
-        // Find in-neighborhood indices
-        long in_nbhd_c = i % nbhd_nc;
-        long in_nbhd_r = i/nbhd_nc/in_nc % nbhd_nr;
+            // Find in-neighborhood indices
+            long in_nbhd_c = i % nbhd_nc;
+            long in_nbhd_r = i/nbhd_nc/in_nc % nbhd_nr;
 
-        // Find the second input tensor indices
-        long in_c = nbhd_c - nbhd_nc/2 + in_nbhd_c;
-        long in_r = nbhd_r - nbhd_nr/2 + in_nbhd_r;
+            // Find the second input tensor indices
+            long in_c = nbhd_c - nbhd_nc/2 + in_nbhd_c;
+            long in_r = nbhd_r - nbhd_nr/2 + in_nbhd_r;
 
-        if (in_c <= 0 || in_r <= 0 || in_nc <= in_c ||  in_nr <= in_r) {
-            output_tensor[i] = 0.0;
-        }
-        else {
-            long idx1 = ((2*sample*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
-            long idx2 = (((2*sample+1)*in_nk + k)*in_nr + in_r)*in_nc + in_c;
-            output_tensor[i] = input_tensor[idx1]-input_tensor[idx2];
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-
-__global__ void idla::impl::applying_reverse_differencing(
-    const float* input_tensor,
-    float* output_tensor,
-    long in_nk,
-    long in_nr,
-    long in_nc,
-    long nbhd_nr,
-    long nbhd_nc,
-    long n
-)
-{
-    for (auto i : dlib::grid_stride_range(0, n))
-    {
-        long nbhd_c = i/nbhd_nc % in_nc;
-        long nbhd_r = i/nbhd_nc/in_nc/nbhd_nr % in_nr;
-        long k = i/nbhd_nc/in_nc/nbhd_nr/in_nr % in_nk;
-        long sample = i/nbhd_nc/in_nc/nbhd_nr/in_nr/in_nk;
-
-        long in_nbhd_c = i % nbhd_nc;
-        long in_nbhd_r = i/nbhd_nc/in_nc % nbhd_nr;
-
-        long in_c = nbhd_c - nbhd_nc/2 + in_nbhd_c;
-        long in_r = nbhd_r - nbhd_nr/2 + in_nbhd_r;
-
-        if (in_c <= 0 || in_r <= 0 || in_nc <= in_c ||  in_nr <= in_r) {
-            output_tensor[i] = 0.0;
-        }
-        else {
-            long idx1 = (((2*sample+1)*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
-            long idx2 = ((2*sample*in_nk + k)*in_nr + in_r)*in_nc + in_c;
-            output_tensor[i] = input_tensor[idx1]-input_tensor[idx2];
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-
-__global__ void idla::impl::get_gradient(
-    const float* gradient_input,
-    float* gradient_output,
-    long num_samples,
-    long out_nk,
-    long out_nr,
-    long out_nc,
-    long nbhd_nr,
-    long nbhd_nc,
-    long n
-)
-{
-    for (auto i : dlib::grid_stride_range(0, n))
-    {
-        long out_c = i % out_nc;
-        long out_r = i/out_nc % out_nr;
-        long k = i/out_nc/out_nr % out_nk;
-        long sample = i/out_nc/out_nr/out_nk;
-
-        gradient_output[i] = 0;
-
-        long flag = (sample % 2 == 0);
-        for (long r = out_r*nbhd_nr; r < (out_r+1)*nbhd_nr; ++r) {
-            long offset = (((1-flag)*num_samples + sample)*out_nk + k*out_nr*nbhd_nr + r)*out_nc*nbhd_nc;
-            for (long c = out_c*nbhd_nc; c < (out_c+1)*nbhd_nc; ++c) {
-                gradient_output[i] += gradient_input[ + offset + c];
+            if (in_c <= 0 || in_r <= 0 || in_nc <= in_c ||  in_nr <= in_r) {
+                output_tensor[i] = 0.0;
+            }
+            else {
+                long idx1 = ((2*sample*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
+                long idx2 = (((2*sample+1)*in_nk + k)*in_nr + in_r)*in_nc + in_c;
+                output_tensor[i] = input_tensor[idx1]-input_tensor[idx2];
             }
         }
+    }
 
-        // Specify in-neighborhood indexes
-        long out_nbhd_r = 0;
-        long out_nbhd_c = 0;
+// ---------------------------------------------------------------------------
 
-        long r_off = nbhd_nr/2;
-        for (long r = out_r+r_off; r > out_r-r_off; --r) {
-            if (r < 0 || r >= out_nr) {
-                ++out_nbhd_r;
-                continue;
+    __global__ void apply_reverse_differencing_impl(
+        const float* input_tensor,
+        float* output_tensor,
+        long in_nk,
+        long in_nr,
+        long in_nc,
+        long nbhd_nr,
+        long nbhd_nc,
+        long n
+    )
+    {
+        for (auto i : dlib::grid_stride_range(0, n))
+        {
+            long nbhd_c = i/nbhd_nc % in_nc;
+            long nbhd_r = i/nbhd_nc/in_nc/nbhd_nr % in_nr;
+            long k = i/nbhd_nc/in_nc/nbhd_nr/in_nr % in_nk;
+            long sample = i/nbhd_nc/in_nc/nbhd_nr/in_nr/in_nk;
+
+            long in_nbhd_c = i % nbhd_nc;
+            long in_nbhd_r = i/nbhd_nc/in_nc % nbhd_nr;
+
+            long in_c = nbhd_c - nbhd_nc/2 + in_nbhd_c;
+            long in_r = nbhd_r - nbhd_nr/2 + in_nbhd_r;
+
+            if (in_c <= 0 || in_r <= 0 || in_nc <= in_c ||  in_nr <= in_r) {
+                output_tensor[i] = 0.0;
+            }
+            else {
+                long idx1 = (((2*sample+1)*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
+                long idx2 = ((2*sample*in_nk + k)*in_nr + in_r)*in_nc + in_c;
+                output_tensor[i] = input_tensor[idx1]-input_tensor[idx2];
+            }
+        }
+    }
+
+// ---------------------------------------------------------------------------
+
+    __global__ void get_differencing_gradient_impl(
+        const float* gradient_input,
+        float* gradient_output,
+        long num_samples,
+        long out_nk,
+        long out_nr,
+        long out_nc,
+        long nbhd_nr,
+        long nbhd_nc,
+        long n
+    )
+    {
+        for (auto i : dlib::grid_stride_range(0, n))
+        {
+            long out_c = i % out_nc;
+            long out_r = i/out_nc % out_nr;
+            long k = i/out_nc/out_nr % out_nk;
+            long sample = i/out_nc/out_nr/out_nk;
+
+            gradient_output[i] = 0;
+
+            long flag = (sample % 2 == 0);
+            for (long r = out_r*nbhd_nr; r < (out_r+1)*nbhd_nr; ++r) {
+                long offset = (((1-flag)*num_samples + sample)*out_nk + k*out_nr*nbhd_nr + r)*out_nc*nbhd_nc;
+                for (long c = out_c*nbhd_nc; c < (out_c+1)*nbhd_nc; ++c) {
+                    gradient_output[i] += gradient_input[ + offset + c];
+                }
             }
 
-            long offset = (((flag*num_samples + sample)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
-            long c_off = nbhd_nc/2;
-            ++out_nbhd_r;
+            // Specify in-neighborhood indexes
+            long out_nbhd_r = 0;
+            long out_nbhd_c = 0;
 
-            for (long c = out_c+c_off; c > out_c-c_off; --c) {
-                if (c < 0 || c >= out_nc) {
-                    ++out_nbhd_c;
+            long r_off = nbhd_nr/2;
+            for (long r = out_r+r_off; r > out_r-r_off; --r) {
+                if (r < 0 || r >= out_nr) {
+                    ++out_nbhd_r;
                     continue;
                 }
 
-                gradient_output[i] += -gradient_input[offset + c*nbhd_nc + out_nbhd_c];
-                ++out_nbhd_c;
+                long offset = (((flag*num_samples + sample)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
+                long c_off = nbhd_nc/2;
+                ++out_nbhd_r;
+
+                for (long c = out_c+c_off; c > out_c-c_off; --c) {
+                    if (c < 0 || c >= out_nc) {
+                        ++out_nbhd_c;
+                        continue;
+                    }
+
+                    gradient_output[i] += -gradient_input[offset + c*nbhd_nc + out_nbhd_c];
+                    ++out_nbhd_c;
+                }
             }
         }
     }
+}
+
+// =========================================================================== //
+// =========================================================================== //
+
+void idla::impl::apply_differencing(
+    const dlib::tensor& input_tensor,
+    dlib::resizable_tensor& data_output,
+    long _nr,
+    long _nc
+)
+{
+    dlib::cuda::launch_kernel(apply_forward_differencing_impl,
+                              dlib::cuda::max_jobs(data_out.size()),
+                              input_tensor.device(),
+                              data_output.device_write_only(),
+                              input_tensor.k(), input_tensor.nr(), input_tensor.nc(),
+                              _nr, _nc, data_out.size()/2);
+
+    dlib::cuda::launch_kernel(apply_reverse_differencing_impl,
+                              dlib::cuda::max_jobs(data_output.size()),
+                              input_tensor.device(),
+                              data_output.device_write_only() + data_out.size()/2,
+                              input_tensor.k(), input_tensor.nr(), input_tensor.nc(),
+                              _nr, _nc, data_out.size()/2);
+}
+
+// ---------------------------------------------------------------------------
+
+void idla::impl::get_differencing_gradient(
+    const dlib::tensor& gradient_input,
+    const dlib::tensor& input_tensor,
+    dlib::tensor& gradient_output
+    long _nr,
+    long _nc
+)
+{
+    dlib::cuda::launch_kernel(get_differencing_gradient_impl,
+                              dlib::cuda::max_jobs(gradient_output.size()),
+                              gradient_input.device(),
+                              gradient_output.device_write_only(),
+                              input_tensor.num_samples()/2,
+                              input_tensor.k(), input_tensor.nr(), input_tensor.nc(),
+                              _nr, _nc, input_tensor.size());
 }
 
 // ---------------------------------------------------------------------------
