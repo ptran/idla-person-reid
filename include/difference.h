@@ -22,10 +22,10 @@ namespace idla {
     }
 
     /*!
-        This object represents a cross-input neighborhood difference operation.
+        This object represents a cross-input neighborhood differences layer.
     */
     template <long _nr=5, long _nc=5>
-    class cross_input_neighborhood_difference_ {
+    class cross_input_neighborhood_differences_ {
     public:
         const static unsigned int sample_expansion_factor = 2;
 
@@ -34,7 +34,7 @@ namespace idla {
         static_assert(_nr % 2 != 0, "The number of rows in a neighborhood must be an odd number");
         static_assert(_nc % 2 != 0, "The number of columns in a neighborhood must be an odd number");
 
-        cross_input_neighborhood_difference_() { }
+        cross_input_neighborhood_differences_() { }
 
         template <typename SUBNET>
         void setup(const SUBNET& sub)
@@ -67,6 +67,12 @@ namespace idla {
             impl::get_differencing_gradient(gradient_input, sub.get_output(), sub.get_gradient_input());
         }
     };
+
+    template <long nr, long nc, typename SUBNET>
+    using cross_input_neighborhood_differences =
+        dlib::add_layer<cross_input_neighborhood_differences_<nr, nc>, SUBNET>;
 }
+
+
 
 #endif // IDLA__DIFFERENCE_H_
