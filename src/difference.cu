@@ -20,7 +20,7 @@ namespace
         long n
     )
     {
-        for (auto i : dlib::grid_stride_range(0, n))
+        for (auto i : dlib::cuda::grid_stride_range(0, n))
         {
             // Find neighborhood indices
             long nbhd_c = i/nbhd_nc % in_nc;               // also center column
@@ -60,7 +60,7 @@ namespace
         long n
     )
     {
-        for (auto i : dlib::grid_stride_range(0, n))
+        for (auto i : dlib::cuda::grid_stride_range(0, n))
         {
             long nbhd_c = i/nbhd_nc % in_nc;
             long nbhd_r = i/nbhd_nc/in_nc/nbhd_nr % in_nr;
@@ -98,7 +98,7 @@ namespace
         long n
     )
     {
-        for (auto i : dlib::grid_stride_range(0, n))
+        for (auto i : dlib::cuda::grid_stride_range(0, n))
         {
             long out_c = i % out_nc;
             long out_r = i/out_nc % out_nr;
