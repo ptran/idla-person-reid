@@ -25,16 +25,16 @@ namespace idla {
         This object represents a cross-input neighborhood differences layer.
     */
     template <long _nr=5, long _nc=5>
-    class cross_input_neighborhood_differences_ {
+    class cross_neighborhood_differences_ {
     public:
-        const static unsigned int sample_expansion_factor = 2;
+        const static unsigned int sample_expansion_factor = 1;
 
         static_assert(_nr > 0, "The number of rows in a neighborhood must be > 0");
         static_assert(_nc > 0, "The number of columns in a neighborhood must be > 0");
         static_assert(_nr % 2 != 0, "The number of rows in a neighborhood must be an odd number");
         static_assert(_nc % 2 != 0, "The number of columns in a neighborhood must be an odd number");
 
-        cross_input_neighborhood_differences_() { }
+        cross_neighborhood_differences_() { }
 
         template <typename SUBNET>
         void setup(const SUBNET& sub)
@@ -69,8 +69,7 @@ namespace idla {
     };
 
     template <long nr, long nc, typename SUBNET>
-    using cross_input_neighborhood_differences =
-        dlib::add_layer<cross_input_neighborhood_differences_<nr, nc>, SUBNET>;
+    using cross_neighborhood_differences = dlib::add_layer<cross_neighborhood_differences_<nr, nc>, SUBNET>;
 }
 
 
