@@ -54,7 +54,6 @@ namespace
     __global__ void get_differencing_gradient_impl(
         const float* gradient_input,
         float* gradient_output,
-        long num_samples,
         long out_nk,
         long out_nr,
         long out_nc,
@@ -65,18 +64,17 @@ namespace
     {
         for (auto i : dlib::cuda::grid_stride_range(0, n))
         {
+            // Find the output indices
             long out_c = i % out_nc;
             long out_r = i/out_nc % out_nr;
             long k = i/out_nc/out_nr % out_nk;
             long sample = i/out_nc/out_nr/out_nk;
 
             gradient_output[i] = 0;
-
-            long flag = (sample % 2 == 0);
             for (long r = out_r*nbhd_nr; r < (out_r+1)*nbhd_nr; ++r) {
-                long offset = (((1-flag)*num_samples + sample)*out_nk + k*out_nr*nbhd_nr + r)*out_nc*nbhd_nc;
+                long offset = ((sample*out_nk + k)*out_nr*nbhd_nr + r)*out_nc*nbhd_nc;
                 for (long c = out_c*nbhd_nc; c < (out_c+1)*nbhd_nc; ++c) {
-                    gradient_output[i] += gradient_input[ + offset + c];
+                    gradient_output[i] += gradient_input[offset + c];
                 }
             }
 
@@ -84,14 +82,14 @@ namespace
             long out_nbhd_r = 0;
             long out_nbhd_c = 0;
 
+            long flag = sample % 2 == 0 : 1 ? -1;
             long r_off = nbhd_nr/2;
             for (long r = out_r+r_off; r > out_r-r_off; --r) {
                 if (r < 0 || r >= out_nr) {
                     ++out_nbhd_r;
                     continue;
                 }
-
-                long offset = (((flag*num_samples + sample)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
+                long offset = (((sample + flag)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
                 long c_off = nbhd_nc/2;
                 ++out_nbhd_r;
 
@@ -100,7 +98,6 @@ namespace
                         ++out_nbhd_c;
                         continue;
                     }
-
                     gradient_output[i] += -gradient_input[offset + c*nbhd_nc + out_nbhd_c];
                     ++out_nbhd_c;
                 }
@@ -141,7 +138,6 @@ void idla::impl::get_differencing_gradient(
                               dlib::cuda::max_jobs(gradient_output.size()),
                               gradient_input.device(),
                               gradient_output.device_write_only(),
-                              input_tensor.num_samples()/2,
                               input_tensor.k(), input_tensor.nr(), input_tensor.nc(),
                               _nr, _nc, input_tensor.size());
 }
