@@ -5,22 +5,10 @@
 
 #include <dlib/dnn.h>
 
-namespace idla {
+#include "difference_impl.h"
 
-    namespace impl {
-        void apply_differencing(
-            const dlib::tensor& input_tensor,
-            dlib::resizable_tensor& data_output,
-            long nbhd_nr,
-            long nbhd_nc
-        );
-
-        void get_differencing_gradient(
-            long nbhd_nr,
-            long nbhd_nc
-        );
-    }
-
+namespace idla
+{
     /*!
         This object represents a cross-input neighborhood differences layer.
     */
@@ -39,7 +27,7 @@ namespace idla {
         template <typename SUBNET>
         void setup(const SUBNET& sub)
         {
-            DLIB_CASSERT(sub.get_output.num_sample() % 2 == 0);
+            DLIB_CASSERT(sub.get_output().num_samples() % 2 == 0);
         }
 
         /*!
@@ -51,7 +39,19 @@ namespace idla {
             const dlib::tensor& input_tensor = sub.get_output();
             data_output.set_size(input_tensor.num_samples(), input_tensor.k(),
                                  _nr*input_tensor.nr(), _nc*input_tensor.nc());
-            impl::apply_differencing(input_tensor, data_output, _nr, _nc);
+
+#ifdef DLIB_USE_CUDA
+            launch_differencing_kernel(input_tensor.device(),
+                                       data_output.device_write_only(),
+                                       input_tensor.k(),
+                                       input_tensor.nr(),
+                                       input_tensor.nc(),
+                                       _nr,
+                                       _nc,
+                                       data_output.size()/2);
+#else
+            COMPILE_TIME_ASSERT("CPU version not implemented yet.")
+#endif
         }
 
         /*!
@@ -64,7 +64,19 @@ namespace idla {
             dlib::tensor& // params_grad
         )
         {
-            impl::get_differencing_gradient(gradient_input, sub.get_output(), sub.get_gradient_input());
+#ifdef DLIB_USE_CUDA
+            const dlib::tensor& input_tensor = sub.get_output();
+            launch_differencing_gradient_kernel(gradient_input.device(),
+                                                sub.get_gradient_input(),
+                                                input_tensor.k(),
+                                                input_tensor.nr(),
+                                                input_tensor.nc(),
+                                                _nr,
+                                                _nc,
+                                                input_tensor.size());
+#else
+            COMPILE_TIME_ASSERT("CPU version not implemented yet.")
+#endif
         }
     };
 
