@@ -48,7 +48,7 @@ namespace idla
                                        input_tensor.nc(),
                                        _nr,
                                        _nc,
-                                       data_output.size()/2);
+                                       data_output.size());
 #else
             COMPILE_TIME_ASSERT("CPU version not implemented yet.")
 #endif

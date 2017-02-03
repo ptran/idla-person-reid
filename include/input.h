@@ -9,25 +9,24 @@
 */
 class input_rgb_image_pair {
 public:
-    const static unsigned int sample_expansion_factor = 2;
     typedef dlib::matrix<dlib::rgb_pixel> image_type;
     typedef std::pair<image_type*,image_type*> input_type;
 
+    /*!
+        This function converts input image pairs into a data tensor.
+    */
     template <typename input_iterator>
     void to_tensor(
         input_iterator ibegin,
         input_iterator iend,
         dlib::resizable_tensor& data
     ) const;
+private:
+    friend void serialize(const input_rgb_image_pair& item, std::ostream& out);
+    friend void deserialize(input_rgb_image_pair& item, std::istream& in);
+    friend std::ostream& operator<<(std::ostream& out, const input_rgb_image_pair& item);
+    friend void to_xml(const input_rgb_image_pair& item, std::ostream& out);
 };
-
-void serialize(const input_rgb_image_pair& item, std::ostream& out);
-
-void deserialize(input_rgb_image_pair& item, std::istream& in);
-
-std::ostream& operator<<(std::ostream& out, const input_rgb_image_pair& item);
-
-void to_xml(const input_rgb_image_pair& item, std::ostream& out);
 
 
 
@@ -49,7 +48,7 @@ void input_rgb_image_pair::to_tensor(
     const long nr = (*ibegin->first).nr();
     const long nc = (*ibegin->first).nr();
     data.set_size(std::distance(ibegin, iend)*2, 3, nr, nc);
-    
+
     long offset = nr*nc*3;
     float* data_ptr = data.host();
     for (auto i = ibegin; i != iend; ++i) {

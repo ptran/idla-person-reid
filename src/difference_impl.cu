@@ -29,15 +29,14 @@ __global__ void apply_differencing_impl(
         long in_c = nbhd_c - nbhd_nc/2 + in_nbhd_c;
         long in_r = nbhd_r - nbhd_nr/2 + in_nbhd_r;
 
-        if (in_c <= 0 || in_r <= 0 || in_nc <= in_c ||  in_nr <= in_r) {
-            output_tensor[2*i] = 0.0;
-            output_tensor[2*i+1] = 0.0;
+        long flag = (sample % 2 == 0) ? 1 : -1;
+        if (in_c < 0 || in_r < 0 || in_nc <= in_c ||  in_nr <= in_r) {
+            output_tensor[i] = 0.0;
         }
         else {
-            long idx1 = ((2*sample*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
-            long idx2 = (((2*sample+1)*in_nk + k)*in_nr + in_r)*in_nc + in_c;
-            output_tensor[2*i] = input_tensor[idx1]-input_tensor[idx2];
-            output_tensor[2*i+1] = input_tensor[idx2]-input_tensor[idx1];
+            long idx1 = ((sample*in_nk + k)*in_nr + nbhd_r)*in_nc + nbhd_c;
+            long idx2 = (((sample+flag)*in_nk + k)*in_nr + in_r)*in_nc + in_c;
+            output_tensor[i] = input_tensor[idx1]-input_tensor[idx2];
         }
     }
 }
@@ -80,7 +79,7 @@ __global__ void get_differencing_gradient_impl(
                 ++out_nbhd_r;
                 continue;
             }
-            long offset = (((sample + flag)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
+            long offset = (((sample+flag)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
             long c_off = nbhd_nc/2;
             ++out_nbhd_r;
 
