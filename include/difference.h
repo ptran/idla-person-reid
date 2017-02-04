@@ -67,7 +67,7 @@ namespace idla
 #ifdef DLIB_USE_CUDA
             const dlib::tensor& input_tensor = sub.get_output();
             launch_differencing_gradient_kernel(gradient_input.device(),
-                                                sub.get_gradient_input(),
+                                                sub.get_gradient_input().device(),
                                                 input_tensor.k(),
                                                 input_tensor.nr(),
                                                 input_tensor.nc(),
@@ -78,12 +78,57 @@ namespace idla
             COMPILE_TIME_ASSERT("CPU version not implemented yet.")
 #endif
         }
+
+        const dlib::tensor& get_layer_params() const { return params; }
+        dlib::tensor& get_layer_params() { return params; }
+
+        friend void serialize(const cross_neighborhood_differences_& item, std::ostream& out)
+        {
+            dlib::serialize("cross_neighborhood_differences", out);
+            dlib::serialize(_nr, out);
+            dlib::serialize(_nc, out);
+        }
+
+        friend void deserialize(cross_neighborhood_differences_& item, std::istream& in)
+        {
+            std::string version;
+            dlib::deserialize(version, in);
+            long nr;
+            long nc;
+            if (version == "cross_neighborhood_differences") {
+                dlib::deserialize(nr, in);
+                dlib::deserialize(nc, in);
+            }
+            else {
+                throw dlib::serialization_error("Unexpected version '"+version+"' found while deserializing idla::cross_neighborhood_differences_.");
+            }
+
+            if (_nr != nr) throw dlib::serialization_error("Wrong nr found while deserializing idla::cross_neighborhood_differences_");
+            if (_nc != nc) throw dlib::serialization_error("Wrong nc found while deserializing idla::cross_neighborhood_differences_");
+        }
+
+        friend std::ostream& operator<<(std::ostream& out, const cross_neighborhood_differences_& item)
+        {
+            out << "cross_neighborhood_differences ("
+                << "nr="<<_nr
+                << ", nc="<<_nc
+                << ")";
+            return out;
+        }
+
+        friend void to_xml(const cross_neighborhood_differences_& item, std::ostream& out)
+        {
+            out << "<cross_neighborhood_differences"
+                << " nr='"<<_nr<<"'"
+                << " nc='"<<_nc<<"'"
+                << "/>\n";
+        }
+    private:
+        dlib::resizable_tensor params;
     };
 
     template <long nr, long nc, typename SUBNET>
     using cross_neighborhood_differences = dlib::add_layer<cross_neighborhood_differences_<nr, nc>, SUBNET>;
 }
-
-
 
 #endif // IDLA__DIFFERENCE_H_
