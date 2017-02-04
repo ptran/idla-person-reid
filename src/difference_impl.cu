@@ -68,27 +68,26 @@ __global__ void get_differencing_gradient_impl(
             }
         }
 
-        // Specify in-neighborhood indexes
-        long out_nbhd_r = 0;
-        long out_nbhd_c = 0;
-
         long flag = (sample % 2 == 0) ? 1 : -1;
         long r_off = nbhd_nr/2;
-        for (long r = out_r+r_off; r > out_r-r_off; --r) {
+        long c_off = nbhd_nc/2;
+
+        long out_nbhd_r = 0;  // in-neighborhood row index
+        for (long r = out_r+r_off; r >= out_r-r_off; --r) {
             if (r < 0 || r >= out_nr) {
                 ++out_nbhd_r;
                 continue;
             }
+            long out_nbhd_c = 0;  // in-neighborhood column index
             long offset = (((sample+flag)*out_nk + k)*out_nr*nbhd_nr + r*nbhd_nr + out_nbhd_r)*out_nc*nbhd_nc;
-            long c_off = nbhd_nc/2;
             ++out_nbhd_r;
 
-            for (long c = out_c+c_off; c > out_c-c_off; --c) {
+            for (long c = out_c+c_off; c >= out_c-c_off; --c) {
                 if (c < 0 || c >= out_nc) {
                     ++out_nbhd_c;
                     continue;
                 }
-                gradient_output[i] += -gradient_input[offset + c*nbhd_nc + out_nbhd_c];
+                gradient_output[i] -= gradient_input[offset + c*nbhd_nc + out_nbhd_c];
                 ++out_nbhd_c;
             }
         }
