@@ -89,7 +89,7 @@ namespace
                    0.4, 0.5, 0.6,
                    0.7, 0.8, 0.9;
 
-            using net_type = idla::cross_neighborhood_differences<3,3,input_test>;
+            using net_type = cross_neighborhood_differences<3,3,input_test>;
             net_type net;
 
             // =============== //

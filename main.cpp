@@ -1,30 +1,52 @@
+#include <chrono>
 #include <iostream>
+#include <string>
+#include <vector>
 
-#include <dlib/matrix.h>
-#include <dlib/pixel.h>
+#include <dlib/cmd_line_parser.h>
+#include <dlib/dir_nav.h>
 
-#include "input.h"
 #include "difference.h"
 
-int main(int argc, char* argv[])
+int main(int argc, char* argv[]) try
 {
-    std::cout << "Just glassin'" << std::endl;
+    dlib::command_line_parser parser;
+    parser.add_option("i", "Directory holding the CUHK03 dataset", 1);
+    parser.add_option("detected", "Indicates the 'detected' dataset should be used. 'labeled' is used by default.");
+    parser.add_option("h", "Display a help message.");
 
-    using net_type = idla::cross_neighborhood_differences<3,3,input_rgb_image_pair>;
-    net_type net;
+    // Parse command line arguments
+    parser.parse(argc, argv);
+    if (parser.option("h")) {
+        std::cout << "Usage: run_reid [--detected] -i cuhk03_dir\n";
+        parser.print_options();
+        return 0;
+    }
 
-    dlib::matrix<dlib::rgb_pixel> img1(3,3);
-    dlib::matrix<dlib::rgb_pixel> img2(3,3);
-    img1 = dlib::rgb_pixel(10,3,10);
-    img2 = dlib::rgb_pixel(5,8,5);
+    if (!parser.option("i")) {
+        std::cout << "You must specify the i option (input directory).\n";
+        std::cout << "\n Try the -h option for more information." << std::endl;
+        return 0;
+    }
 
-    input_rgb_image_pair::input_type in1 = {&img1, &img2};
-    dlib::resizable_tensor output = net(in1);
-    dlib::matrix<float> outmat = dlib::mat(output);
+    // Load in dataset and time it
+    std::string cuhk03_dir = parser.option("i").argument();
+    std::cout << "Attempting to load the CUHK03 dataset from '" << cuhk03_dir << "'..." << std::endl;
+    if (!dlib::file_exists(cuhk03_dir+"cuhk-03.mat")) {
+        throw std::runtime_error("'"+cuhk03_dir+"' does not contain cuhk-03.mat.");
+    }
 
-    std::cout << output.num_samples() << ","
-              << output.k()           << ","
-              << output.nr()          << ","
-              << output.nc()          << std::endl;
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
+    // Insert data loading code here
+    end = std::chrono::system_clock::now();
+
+    std::chrono::duration<double> elapsed_seconds = end-start;
+    std::cout << elapsed_seconds.count() << " seconds to load dataset." << std::endl;
+
     return 0;
+}
+catch (std::exception& e)
+{
+    std::cout << e.what() << std::endl;
 }

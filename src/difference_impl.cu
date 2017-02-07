@@ -94,7 +94,7 @@ __global__ void get_differencing_gradient_impl(
     }
 }
 
-void idla::launch_differencing_kernel(
+void launch_differencing_kernel(
     const float* input_tensor,
     float* data_output,
     long in_nk,
@@ -113,7 +113,7 @@ void idla::launch_differencing_kernel(
                               nbhd_nr, nbhd_nc, n);
 }
 
-void idla::launch_differencing_gradient_kernel(
+void launch_differencing_gradient_kernel(
     const float* gradient_input,
     float* gradient_output,
     long in_nk,
