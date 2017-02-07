@@ -5,7 +5,9 @@
 
 #include <dlib/cmd_line_parser.h>
 #include <dlib/dir_nav.h>
+#include <dlib/gui_widgets.h>
 
+#include "dataset.h"
 #include "difference.h"
 
 int main(int argc, char* argv[]) try
@@ -36,9 +38,13 @@ int main(int argc, char* argv[]) try
         throw std::runtime_error("'"+cuhk03_dir+"' does not contain cuhk-03.mat.");
     }
 
+    // CUHK03 dataset
+    std::vector<person_set> pset;
+    std::vector<std::vector<int>> test_protocols;
+
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
-    // Insert data loading code here
+    load_cuhk03_dataset(cuhk03_dir+"cuhk-03.mat", pset, test_protocols);
     end = std::chrono::system_clock::now();
 
     std::chrono::duration<double> elapsed_seconds = end-start;
