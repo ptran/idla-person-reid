@@ -15,21 +15,22 @@ class cross_neighborhood_differences_ {
 public:
     const static unsigned int sample_expansion_factor = 1;
 
-    static_assert(_nr > 0, "The number of rows in a neighborhood must be > 0");
-    static_assert(_nc > 0, "The number of columns in a neighborhood must be > 0");
-    static_assert(_nr % 2 != 0, "The number of rows in a neighborhood must be an odd number");
-    static_assert(_nc % 2 != 0, "The number of columns in a neighborhood must be an odd number");
+    static_assert(_nr > 0, "The number of rows in the neighborhood region must be > 0");
+    static_assert(_nc > 0, "The number of columns in the neighborhood region must be > 0");
+    static_assert(_nr % 2 != 0, "The number of rows in the neighborhood region must be an odd number");
+    static_assert(_nc % 2 != 0, "The number of columns in the neighborhood region must be an odd number");
 
     cross_neighborhood_differences_() { }
 
     template <typename SUBNET>
     void setup(const SUBNET& sub)
     {
-        DLIB_CASSERT(sub.get_output().num_samples() % 2 == 0);
+        DLIB_CASSERT(sub.get_output().num_samples() % 2 == 0, "");
     }
 
     /*!
-      Performs the forward operation of this layer.
+        Performs the cross-input neighborhood differencing operation to each 
+        sample pair.
     */
     template <typename SUBNET>
     void forward(const SUBNET& sub, dlib::resizable_tensor& data_output)
@@ -98,16 +99,16 @@ public:
             dlib::deserialize(nc, in);
         }
         else {
-            throw dlib::serialization_error("Unexpected version '"+version+"' found while deserializing idla::cross_neighborhood_differences_.");
+            throw dlib::serialization_error("Unexpected version '"+version+"' found while deserializing cross_neighborhood_differences_.");
         }
 
-        if (_nr != nr) throw dlib::serialization_error("Wrong nr found while deserializing idla::cross_neighborhood_differences_");
-        if (_nc != nc) throw dlib::serialization_error("Wrong nc found while deserializing idla::cross_neighborhood_differences_");
+        if (_nr != nr) throw dlib::serialization_error("Wrong nr found while deserializing cross_neighborhood_differences_");
+        if (_nc != nc) throw dlib::serialization_error("Wrong nc found while deserializing cross_neighborhood_differences_");
     }
 
     friend std::ostream& operator<<(std::ostream& out, const cross_neighborhood_differences_& item)
     {
-        out << "cross_neighborhood_differences ("
+        out << "cross_neighborhood_differences\t ("
             << "nr="<<_nr
             << ", nc="<<_nc
             << ")";
