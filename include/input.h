@@ -1,3 +1,6 @@
+#ifndef IDLA__INPUT_H_
+#define IDLA__INPUT_H_
+
 #include <utility>
 
 #include <dlib/statistics.h>
@@ -88,3 +91,5 @@ void input_rgb_image_pair::to_tensor(
         data_ptr += offset;
     }
 }
+
+#endif // IDLA__INPUT_H_
