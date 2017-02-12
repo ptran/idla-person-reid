@@ -10,7 +10,10 @@ set(test_suite
   )
 
 # Set variable for tests
-set(tests difference.cpp)
+set(tests
+  difference.cpp
+  reinterpret.cpp
+  )
 
 # Turn on all warnings when using gcc.
 if (CMAKE_COMPILER_IS_GNUCXX)

@@ -41,12 +41,14 @@ if (${DLIB_USE_CUDA})
   cuda_add_library(idla STATIC ${source_code})
   target_link_libraries(idla dlib)
 
-  add_executable(run_reid main.cpp)
-  target_link_libraries(run_reid idla dlib ${HDF5_LIBRARIES})
+  # CUHK03 script
+  add_executable(run_cuhk03 cuhk03.cpp)
+  target_link_libraries(run_cuhk03 idla dlib ${HDF5_LIBRARIES})
 else()
   # Add CUDA-alternative code
-  message(FATAL "CUDA required for this to work.")
+  message(FATAL_ERROR "CUDA required for this to work.")
 endif()
+install(TARGETS run_cuhk03 DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 if (BUILD_TEST)
   add_subdirectory(test)

@@ -4,6 +4,7 @@
 
 #include <dlib/dnn.h>
 
+#include "input_test.h"
 #include "dlib_testing_suite/tester.h"
 
 namespace
@@ -11,67 +12,6 @@ namespace
     using namespace test;
 
     dlib::logger dlog("test.difference");
-
-// ---------------------------------------------------------------------------
-
-    // An input layer for testing
-    class input_test {
-    public:
-        typedef dlib::matrix<float> image_type;
-        typedef std::pair<image_type*,image_type*> input_type;
-
-        template <typename input_iterator>
-        void to_tensor(
-            input_iterator ibegin,
-            input_iterator iend,
-            dlib::resizable_tensor& data
-        ) const
-        {
-            const long nr = ibegin->first->nr();
-            const long nc = ibegin->second->nc();
-            data.set_size(std::distance(ibegin, iend)*2, 1, nr, nc);
-
-            long offset = nr*nc;
-            float* data_ptr = data.host();
-            for (auto i = ibegin; i != iend; ++i) {
-                for (long r = 0; r < nr; ++r) {
-                    for (long c = 0; c < nc; ++c) {
-                        float* p = data_ptr++;
-                        *p = (*ibegin->first)(r,c);
-                        *(p+offset) = (*ibegin->second)(r,c);
-                    }
-                }
-                data_ptr += offset;
-            }
-        }
-    private:
-        friend void serialize(const input_test&, std::ostream& out)
-        {
-            dlib::serialize("input_test", out);
-        }
-
-        friend void deserialize(input_test&, std::istream& in)
-        {
-            std::string version;
-            dlib::deserialize(version, in);
-            if (version != "input_test") {
-                throw dlib::serialization_error("Unexpected version found while deserializing input_test.");
-            }
-        }
-
-        friend std::ostream& operator<<(std::ostream& out, const input_test&)
-        {
-            out << "input_test";
-            return out;
-        }
-
-        friend void to_xml(const input_test&, std::ostream& out)
-        {
-            out << "<input_test/>";
-        }
-    };
-
-// ---------------------------------------------------------------------------
 
     class test_difference : public tester {
     public:
@@ -121,10 +61,10 @@ namespace
             dlib::matrix<float> output_mat = dlib::mat(net(img_pair));
 
             dlib::matrix<float> netK1 = dlib::reshape(dlib::rowm(output_mat, 0), 9, 9);
-            DLIB_TEST_MSG(dlib::sum(K1-netK1) <= 1e-4, "");
+            DLIB_TEST(dlib::sum(K1-netK1) <= 1e-4);
 
             dlib::matrix<float> netK2 = dlib::reshape(dlib::rowm(output_mat, 1), 9, 9);
-            DLIB_TEST_MSG(dlib::sum(K2-netK2) <= 1e-4, "");
+            DLIB_TEST(dlib::sum(K2-netK2) <= 1e-4);
 
             // ================ //
             //  GRADIENT CHECK  //
@@ -169,10 +109,10 @@ namespace
             dlib::matrix<float> grad_mat = dlib::mat(net.get_final_data_gradient());
 
             dlib::matrix<float,3,3> netgrad1 = dlib::reshape(dlib::rowm(grad_mat, 0), 3, 3);
-            DLIB_TEST_MSG(dlib::sum(grad1-netgrad1) <= 1e-4, "");
+            DLIB_TEST(dlib::sum(grad1-netgrad1) <= 1e-4);
 
             dlib::matrix<float,3,3> netgrad2 = dlib::reshape(dlib::rowm(grad_mat, 1), 3, 3);
-            DLIB_TEST_MSG(dlib::sum(grad2-netgrad2) <= 1e-4, "");
+            DLIB_TEST(dlib::sum(grad2-netgrad2) <= 1e-4);
         }
     };
 

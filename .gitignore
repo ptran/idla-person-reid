@@ -1,1 +1,5 @@
 build/
+bin/
+
+# emacs products
+flymd.*
