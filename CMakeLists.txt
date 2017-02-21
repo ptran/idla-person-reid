@@ -13,6 +13,17 @@ else()
   message(FATAL_ERROR "DLIB_DIR must be defined as the path to dlib's root directory.")
 endif()
 
+# Check the version of dlib
+if (${DLIB_VERSION} VERSION_GREATER 19.0.0)
+  # If the version is greater than 19.2.0, define a flag that the code will use
+  # to implement the new loss layer interface.
+  if (${DLIB_VERSION} VERSION_GREATER 19.2.0)
+    add_definitions(-DNEW_DLIB_LOSS)
+  endif()
+else()
+  message(FATAL_ERROR "dlib must be at least version 19.0.0. ${DLIB_VERSION} found.")
+endif()
+
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 
 include_directories(${HDF5_INCLUDE_DIRS})

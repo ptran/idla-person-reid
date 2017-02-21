@@ -42,7 +42,7 @@ public:
         dlib::tensor& // params_grad
     )
     {
-        dlib::memcpy(sub.get_gradient_input(), gradient_input);
+        memcpy(sub.get_gradient_input(), gradient_input);
     }
 
     const dlib::tensor& get_layer_params() const { return params; }
@@ -50,7 +50,7 @@ public:
 
     friend void serialize(const reinterpret_& item, std::ostream& out)
     {
-        dlib::serialize("reshp", out);
+        dlib::serialize("reinterpret", out);
         dlib::serialize(N, out);
     }
 
