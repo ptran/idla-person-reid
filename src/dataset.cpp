@@ -45,7 +45,7 @@ const std::vector<dlib::matrix<dlib::rgb_pixel>>& person_set::view(unsigned int 
 void load_cuhk03_dataset(
     const std::string& cuhk03_file,
     std::vector<person_set>& images,
-    std::vector<std::vector<int>> test_protocols,
+    std::vector<std::vector<int>>& test_protocols,
     cuhk03_dataset_type type,
     long nr,
     long nc

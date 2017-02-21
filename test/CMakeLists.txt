@@ -23,3 +23,4 @@ endif()
 # Create test executable
 add_executable(dtest ${test_suite} ${tests})
 target_link_libraries(dtest dlib idla)
+install(TARGETS dtest DESTINATION "${CMAKE_SOURCE_DIR}/bin")
