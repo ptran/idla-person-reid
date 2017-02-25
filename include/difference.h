@@ -38,7 +38,6 @@ public:
         const dlib::tensor& input_tensor = sub.get_output();
         data_output.set_size(input_tensor.num_samples(), input_tensor.k(),
                              _nr*input_tensor.nr(), _nc*input_tensor.nc());
-
 #ifdef DLIB_USE_CUDA
         launch_differencing_kernel(input_tensor.device(),
                                    data_output.device_write_only(),
@@ -49,7 +48,7 @@ public:
                                    _nc,
                                    data_output.size());
 #else
-        COMPILE_TIME_ASSERT("CPU version not implemented yet.")
+        COMPILE_TIME_ASSERT("CPU version not implemented yet.");
 #endif
     }
 
@@ -74,7 +73,7 @@ public:
                                             _nc,
                                             input_tensor.size());
 #else
-        COMPILE_TIME_ASSERT("CPU version not implemented yet.")
+        COMPILE_TIME_ASSERT("CPU version not implemented yet.");
 #endif
     }
 
