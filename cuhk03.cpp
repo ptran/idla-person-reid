@@ -214,7 +214,7 @@ int main(int argc, char* argv[]) try
     trainer.set_synchronization_file("cuhk03_modidla", std::chrono::seconds(60));
 
     // Prepare data
-    long batch_size = 64;
+    long batch_size = 128;
     dlib::rand rng;
     unsigned int test_index = rng.get_random_32bit_number() % 20;
     minibatch_generator batchgen(pset, test_protocols[test_index]);
@@ -224,10 +224,12 @@ int main(int argc, char* argv[]) try
         minibatch batch = batchgen(batch_size);
         trainer.train_one_step(batch.data.begin(), batch.data.end(), batch.labels.begin());
     }
+    trainer.get_net();
 
     // Save the network to disk
     net.clean();
-    dlib::serialize("cuhk03_modidla.dat") << net;
+    std::cout << "Saving network..." << std::endl;
+    dlib::serialize("cuhk03_modidla.dnn") << net;
 
     return 0;
 }
