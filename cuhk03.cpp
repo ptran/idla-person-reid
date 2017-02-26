@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) try
     trainer.set_learning_rate_schedule(inverse_learning_rate_schedule);
 
     // Save training progress
-    trainer.set_synchronization_file("cuhk03_modidla", std::chrono::seconds(60));
+    trainer.set_synchronization_file("cuhk03_modidla.dat", std::chrono::seconds(60));
 
     // Prepare data
     long batch_size = 128;
