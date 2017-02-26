@@ -58,8 +58,8 @@ class minibatch_generator {
 public:
     minibatch_generator(
         const std::vector<person_set>& pset_,
-        const std::vector<int>& tidx_
-    ) : pset(pset_), tidx(tidx_)
+        const std::vector<int>& tidx
+    ) : pset(pset_)
     {
         for (unsigned long i = 0; i < pset_.size(); ++i) {
             if (std::find(tidx.begin(), tidx.end(), i) == tidx.end())
@@ -67,7 +67,7 @@ public:
         }
     }
 
-    minibatch operator()(unsigned long size, bool test=false)
+    minibatch operator()(unsigned long size)
     {
         DLIB_CASSERT(size % 2 == 0, "");
 
@@ -76,10 +76,7 @@ public:
         bool empty_view = true;
         while (empty_view) {
             unsigned int seed = rng.get_random_32bit_number();
-            if (!test)
-                samples = dlib::randomly_subsample(tridx, size, seed);
-            else
-                samples = dlib::randomly_subsample(tidx, size, seed);
+            samples = dlib::randomly_subsample(tridx, size, seed);
 
             empty_view = false;
             for (unsigned int i = 0; i < size/2; ++i) {
@@ -133,7 +130,6 @@ private:
     dlib::rand rng;
     const std::vector<person_set>& pset; 
     std::vector<int> tridx;                //  training index
-    const std::vector<int>& tidx;          //  testing index
 };
 
 // ---------------------------------------------------------------------------
@@ -170,8 +166,10 @@ int main(int argc, char* argv[]) try
         cuhk03_dir += os_delim;
     }
 
-    std::cout << "Attempting to load the CUHK03 dataset from '" << cuhk03_dir
-              << "' [should take up to 15 seconds in release mode]..." << std::endl;
+    cuhk03_dataset_type dset_type = parser.option("detected") ? DETECTED : LABELED;
+    std::cout << "Attempting to load the CUHK03 " << ((dset_type == LABELED) ? "labeled" : "detected")
+              << " dataset from '" << cuhk03_dir << "' [should take up to 15 seconds in release mode]..." << std::endl;
+
     if (!dlib::file_exists(cuhk03_dir+"cuhk-03.mat")) {
         throw std::runtime_error("'"+cuhk03_dir+"' does not contain cuhk-03.mat.");
     }
@@ -182,7 +180,7 @@ int main(int argc, char* argv[]) try
 
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
-    load_cuhk03_dataset(cuhk03_dir+"cuhk-03.mat", pset, test_protocols);
+    load_cuhk03_dataset(cuhk03_dir+"cuhk-03.mat", pset, test_protocols, dset_type);
     end = std::chrono::system_clock::now();
 
     std::chrono::duration<double> elapsed_seconds = end-start;
@@ -211,7 +209,13 @@ int main(int argc, char* argv[]) try
     trainer.set_learning_rate_schedule(inverse_learning_rate_schedule);
 
     // Save training progress
-    trainer.set_synchronization_file("cuhk03_modidla.dat", std::chrono::seconds(60));
+    std::string save_name;
+    {
+        std::ostringstream oss;
+        oss << "cuhk03_modidla_" << ((dset_type == LABELED) ? "labeled" : "detected");
+        save_name = oss.str();
+    }
+    trainer.set_synchronization_file(save_name+".dat", std::chrono::seconds(60));
 
     // Prepare data
     long batch_size = 128;
@@ -219,7 +223,7 @@ int main(int argc, char* argv[]) try
     unsigned int test_index = rng.get_random_32bit_number() % 20;
     minibatch_generator batchgen(pset, test_protocols[test_index]);
 
-    std::cout << net << std::endl;
+    std::cout << std::endl << net << std::endl;
     while (trainer.get_train_one_step_calls() < max_iterations) {
         minibatch batch = batchgen(batch_size);
         trainer.train_one_step(batch.data.begin(), batch.data.end(), batch.labels.begin());
@@ -229,7 +233,14 @@ int main(int argc, char* argv[]) try
     // Save the network to disk
     net.clean();
     std::cout << "Saving network..." << std::endl;
-    dlib::serialize("cuhk03_modidla.dnn") << net;
+    dlib::serialize(save_name+".dnn") << net;
+
+    // Test the network on the CUHK03 testing data.
+    dlib::softmax<anet_type::subnet_type> snet;
+    snet.subnet() = net.subnet();
+
+    std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
+    // TODO write evaluation code
 
     return 0;
 }
