@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <string>
 #include <vector>
 
 #include <dlib/cmd_line_parser.h>
+#include <dlib/console_progress_indicator.h>
 #include <dlib/dir_nav.h>
 #include <dlib/dnn.h>
 #include <dlib/rand.h>
@@ -223,6 +225,7 @@ int main(int argc, char* argv[]) try
     unsigned int test_index = rng.get_random_32bit_number() % 20;
     minibatch_generator batchgen(pset, test_protocols[test_index]);
 
+    // Train neural network
     std::cout << std::endl << net << std::endl;
     while (trainer.get_train_one_step_calls() < max_iterations) {
         minibatch batch = batchgen(batch_size);
@@ -236,11 +239,72 @@ int main(int argc, char* argv[]) try
     dlib::serialize(save_name+".dnn") << net;
 
     // Test the network on the CUHK03 testing data.
-    dlib::softmax<anet_type::subnet_type> snet;
-    snet.subnet() = net.subnet();
-
+    dlib::softmax<anet_type::subnet_type> tnet;
+    tnet.subnet() = net.subnet();
     std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
-    // TODO write evaluation code
+
+    // Use the 
+    const std::vector<int>& test_protocol = test_protocols[test_index];
+    std::vector<int> ranked_counter(test_protocol.size(), 0);
+    int num_probes = 0;
+
+    dlib::console_progress_indicator pbar(test_protocol.size());
+    for (unsigned int i = 0; i < test_protocol.size(); ++i) {
+        // Specify the current probe ID
+        int pid = test_protocol[i];
+
+        pbar.print_status(i);
+        const std::vector<dlib::matrix<dlib::rgb_pixel>>& probe_imgs = pset[pid].view(0);
+        for (const dlib::matrix<dlib::rgb_pixel>& probe_img : probe_imgs) {
+            ++num_probes;
+
+            std::vector<std::pair<float,int>> scores;
+            scores.reserve(test_protocol.size());
+            for (unsigned int j = 0; j < test_protocol.size(); ++j) {
+                int gid = test_protocol[j];
+                const std::vector<dlib::matrix<dlib::rgb_pixel>>& gallery_imgs = pset[gid].view(1);
+
+                std::vector<input_type> img_pairs;
+                img_pairs.reserve(gallery_imgs.size());
+                for (const dlib::matrix<dlib::rgb_pixel>& gallery_img : gallery_imgs) {
+                    img_pairs.emplace_back(&probe_img, &gallery_img);
+                }
+
+                // Randomly choose one pairwise score to represent the current
+                // gallery ID
+                dlib::matrix<float> output = dlib::mat(tnet(img_pairs.begin(), img_pairs.end()));
+                int tmp = rng.get_random_32bit_number() % output.nr();
+                scores.emplace_back(output(tmp, 1), gid);
+            }
+            // Sort score and ID pairs and scan for the matching ID
+            std::sort(scores.begin(), scores.end(),
+                      [](const std::pair<double,int>& i, const std::pair<double,int>& j) -> bool
+                      {
+                          return i.first > j.first;
+                      });
+
+            for (unsigned int j = 0; j < scores.size(); ++j) {
+                if (pid == scores[j].second) {
+                    ++ranked_counter[j];
+                    break;
+                }
+            }
+        }
+    }
+
+    // Calculate the cumulative match curve for this dataset.
+    dlib::matrix<double> cmc;
+    cmc.set_size(1, ranked_counter.size());
+    int accumulated_count = 0;
+
+    std::ofstream cmc_file;
+    cmc_file.open("cuhk03_modidla.csv");
+    for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
+        accumulated_count += ranked_counter[i];
+        cmc(i) = static_cast<double>(accumulated_count)/num_probes;
+        cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
+    }
+    std::cout << "Cumulative Match Curve: " << std::endl << cmc << std::endl;
 
     return 0;
 }
