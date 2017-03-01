@@ -298,13 +298,13 @@ int main(int argc, char* argv[]) try
     int accumulated_count = 0;
 
     std::ofstream cmc_file;
-    cmc_file.open("cuhk03_modidla.csv");
+    cmc_file.open("cmc_cuhk03_modidla.csv");
     for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
         accumulated_count += ranked_counter[i];
         cmc(i) = static_cast<double>(accumulated_count)/num_probes;
         cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
     }
-    std::cout << "Cumulative Match Curve: " << std::endl << cmc << std::endl;
+    std::cout << "\nCumulative match curve saved to `cmc_cuhk03_modidla.csv`." << std::endl;
 
     return 0;
 }
