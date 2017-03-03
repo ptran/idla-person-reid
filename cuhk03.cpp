@@ -214,14 +214,14 @@ int main(int argc, char* argv[]) try
     std::string save_name;
     {
         std::ostringstream oss;
-        oss << "cuhk03_modidla_" << ((dset_type == LABELED) ? "labeled" : "detected");
+        oss << "cuhk03_" << ((dset_type == LABELED) ? "labeled" : "detected") << "_modidla";
         save_name = oss.str();
     }
     trainer.set_synchronization_file(save_name+".dat", std::chrono::seconds(60));
 
     // Prepare data
     long batch_size = 128;
-    dlib::rand rng;
+    dlib::rand rng(0);
     unsigned int test_index = rng.get_random_32bit_number() % 20;
     minibatch_generator batchgen(pset, test_protocols[test_index]);
 
@@ -243,11 +243,12 @@ int main(int argc, char* argv[]) try
     tnet.subnet() = net.subnet();
     std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
 
-    // Use the 
+    // Use the specified test indices for evaluation
     const std::vector<int>& test_protocol = test_protocols[test_index];
     std::vector<int> ranked_counter(test_protocol.size(), 0);
     int num_probes = 0;
 
+    const int num_trials = 100;
     dlib::console_progress_indicator pbar(test_protocol.size());
     for (unsigned int i = 0; i < test_protocol.size(); ++i) {
         // Specify the current probe ID
@@ -258,8 +259,11 @@ int main(int argc, char* argv[]) try
         for (const dlib::matrix<dlib::rgb_pixel>& probe_img : probe_imgs) {
             ++num_probes;
 
-            std::vector<std::pair<float,int>> scores;
-            scores.reserve(test_protocol.size());
+            std::vector<std::vector<std::pair<float,int>>> trials(num_trials);
+            for (int t = 0; t < num_trials; ++t) {
+                trials[t].reserve(test_protocol.size());
+            }
+
             for (unsigned int j = 0; j < test_protocol.size(); ++j) {
                 int gid = test_protocol[j];
                 const std::vector<dlib::matrix<dlib::rgb_pixel>>& gallery_imgs = pset[gid].view(1);
@@ -273,20 +277,27 @@ int main(int argc, char* argv[]) try
                 // Randomly choose one pairwise score to represent the current
                 // gallery ID
                 dlib::matrix<float> output = dlib::mat(tnet(img_pairs.begin(), img_pairs.end()));
-                int tmp = rng.get_random_32bit_number() % output.nr();
-                scores.emplace_back(output(tmp, 1), gid);
-            }
-            // Sort score and ID pairs and scan for the matching ID
-            std::sort(scores.begin(), scores.end(),
-                      [](const std::pair<double,int>& i, const std::pair<double,int>& j) -> bool
-                      {
-                          return i.first > j.first;
-                      });
 
-            for (unsigned int j = 0; j < scores.size(); ++j) {
-                if (pid == scores[j].second) {
-                    ++ranked_counter[j];
-                    break;
+                for (auto& trial : trials) {
+                    int tmp = rng.get_random_32bit_number() % output.nr();
+                    trial.emplace_back(output(tmp, 1), gid);
+                }
+            }
+
+            for (auto& trial : trials) {
+                // Sort score and ID pairs and scan for the matching ID
+                std::sort(trial.begin(), trial.end(),
+                          [](const std::pair<double,int>& i, const std::pair<double,int>& j) -> bool
+                          {
+                              return i.first > j.first;
+                          });
+
+                // Find the first occurrence of the same ID person
+                for (unsigned int j = 0; j < trial.size(); ++j) {
+                    if (pid == trial[j].second) {
+                        ++ranked_counter[j];
+                        break;
+                    }
                 }
             }
         }
@@ -298,10 +309,10 @@ int main(int argc, char* argv[]) try
     int accumulated_count = 0;
 
     std::ofstream cmc_file;
-    cmc_file.open("cmc_cuhk03_modidla.csv");
+    cmc_file.open("cmc_"+save_name+".csv");
     for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
         accumulated_count += ranked_counter[i];
-        cmc(i) = static_cast<double>(accumulated_count)/num_probes;
+        cmc(i) = static_cast<double>(accumulated_count)/(num_probes*num_trials);
         cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
     }
     std::cout << "\nCumulative match curve saved to `cmc_cuhk03_modidla.csv`." << std::endl;
