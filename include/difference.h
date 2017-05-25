@@ -35,6 +35,9 @@ public:
     template <typename SUBNET>
     void forward(const SUBNET& sub, dlib::resizable_tensor& data_output)
     {
+        // Cross-input neighborhood differencing creates an output that has _nr
+        // times more rows and _nc times more columns. This is due to the
+        // neighborhood output produced at every pixel.
         const dlib::tensor& input_tensor = sub.get_output();
         data_output.set_size(input_tensor.num_samples(), input_tensor.k(),
                              _nr*input_tensor.nr(), _nc*input_tensor.nc());
