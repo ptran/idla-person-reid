@@ -5,7 +5,11 @@
 
 #include <dlib/dnn.h>
 
-#include "difference_impl.h"
+#ifdef DLIB_USE_CUDA
+  #include "difference_impl_gpu.h"
+#else
+  #include "difference_impl_cpu.h"
+#endif // DLIB_USE_CUDA
 
 /*!
     This object represents a cross-input neighborhood differences layer.
@@ -51,7 +55,7 @@ public:
                                    _nc,
                                    data_output.size());
 #else
-        COMPILE_TIME_ASSERT("CPU version not implemented yet.");
+        perform_cross_neighborhood_differencing(input_tensor, data_output, dlib::vector<long,2>(_nc, _nr));
 #endif
     }
 
@@ -76,7 +80,7 @@ public:
                                             _nc,
                                             input_tensor.size());
 #else
-        COMPILE_TIME_ASSERT("CPU version not implemented yet.");
+        backpropagate_differencing_gradient(gradient_input, sub.get_gradient_input());
 #endif
     }
 

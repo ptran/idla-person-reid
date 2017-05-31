@@ -1,4 +1,4 @@
-#include "difference_impl.h"
+#include "difference_impl_gpu.h"
 
 #include <dlib/dnn/cuda_utils.h>
 
