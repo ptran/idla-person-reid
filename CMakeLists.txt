@@ -9,7 +9,15 @@ set(GPU_ARCHITECTURE "sm_30" CACHE INTERNAL "Target GPU architecture for PTX and
 
 # Find and build the dlib directory
 if (DEFINED DLIB_DIR)
-  include(${DLIB_DIR}/dlib/cmake)
+  find_path(DLIB_ROOT_DIR
+    dlib/cmake
+    PATHS ${DLIB_DIR} $ENV{DLIB_DIR})
+
+  if (EXISTS ${DLIB_ROOT_DIR})
+    include(${DLIB_ROOT_DIR}/dlib/cmake)
+  else()
+    message(FATAL_ERROR "DLIB_DIR must contain 'dlib/cmake'.")
+  endif()
 else()
   message(FATAL_ERROR "DLIB_DIR must be defined as the path to dlib's root directory.")
 endif()
