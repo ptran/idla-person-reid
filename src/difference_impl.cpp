@@ -87,28 +87,30 @@ void backpropagate_differencing_gradient(const dlib::tensor& gradient_input, dli
                     // pixel and a "neighborhood image" pixel
                     for (long nbhd_r = 0; nbhd_r < nbhd_nr; ++nbhd_r) {
                         const float* input_ptr1 = nullptr;
-                        long img_r1 = r - (nbhd_r-nbhd_nr/2);
+                        long img_r1 = r + (nbhd_r-nbhd_nr/2);
                         if (img_r1 >= 0 && img_r1 < gradient_output.nr()) {
-                            input_ptr1 = get_element_pointer(gradient_input, n, k, img_r1, 0);
+                            input_ptr1 = get_element_pointer(gradient_input, n, k, r*nbhd_nr + nbhd_r, 0);
                         }
 
                         const float* input_ptr2 = nullptr;
-                        long img_r2 = r + (nbhd_nr/2-nbhd_r);
+                        long scan_r = r + nbhd_nr/2 - nbhd_r; // neighborhood image row
+                        long img_r2 = scan_r + (nbhd_r-nbhd_nr/2);
                         if (img_r2 >= 0 && img_r2 < gradient_output.nr()) {
-                            input_ptr2 = get_element_pointer(gradient_input, n+flag, k, r, 0);
+                            input_ptr2 = get_element_pointer(gradient_input, n+flag, k, scan_r*nbhd_nr + nbhd_r, 0);
                         }
 
                         for (long nbhd_c = 0; nbhd_c < nbhd_nc; ++nbhd_c) {
                             if (input_ptr1 != nullptr) {
-                                long img_c1 = c - (nbhd_c-nbhd_nc/2);
+                                long img_c1 = c + (nbhd_c-nbhd_nc/2);
                                 if (img_c1 >= 0 && img_c1 < gradient_output.nc()) {
-                                    *output_ptr += *(input_ptr1+img_c1);
+                                    *output_ptr += *(input_ptr1 + c*nbhd_nc + nbhd_c);
                                 }
                             }
                             if (input_ptr2 != nullptr) {
-                                long img_c2 = c + (nbhd_nc/2-nbhd_c);
+                                long scan_c = c + nbhd_nc/2 - nbhd_c; // neighborhood image column
+                                long img_c2 = scan_c + (nbhd_c-nbhd_nc/2);
                                 if (img_c2 >= 0 && img_c2 < gradient_output.nc()) {
-                                    *output_ptr -= *(input_ptr2+img_c2);
+                                    *output_ptr -= *(input_ptr2 + scan_c*nbhd_nc + nbhd_c);
                                 }
                             }
                         } // nbhd_c

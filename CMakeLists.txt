@@ -5,6 +5,7 @@ project(idla)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 option(BUILD_TEST "Determines whether unit tests should be built." OFF)
+set(GPU_ARCHITECTURE "sm_30" CACHE INTERNAL "Target GPU architecture for PTX and SASS code generation.")
 
 # Find and build the dlib directory
 if (DEFINED DLIB_DIR)
@@ -46,19 +47,25 @@ if (${DLIB_USE_CUDA})
   find_package(CUDA REQUIRED)
 
   # Following line taken from dlib's CMakeLists.txt
-  list(APPEND CUDA_NVCC_FLAGS "-arch=sm_30;-D__STRICT_ANSI__;-D_MWAITXINTRIN_H_INCLUDED;-D_FORCE_INLINES")
+  list(APPEND CUDA_NVCC_FLAGS "-arch=${GPU_ARCHITECTURE};-D__STRICT_ANSI__;-D_MWAITXINTRIN_H_INCLUDED;-D_FORCE_INLINES")
 
   # Build library code
   cuda_add_library(idla STATIC ${source_code})
   target_link_libraries(idla dlib)
-
-  # CUHK03 script
-  add_executable(run_cuhk03 cuhk03.cpp)
-  target_link_libraries(run_cuhk03 idla dlib ${HDF5_LIBRARIES})
 else()
   # Add CUDA-alternative code
-  message(FATAL_ERROR "CUDA required for this to work.")
+  set(source_code
+    ${source_code}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/difference_impl.cpp
+    )
+
+  add_library(idla STATIC ${source_code})
+  target_link_libraries(idla dlib)
 endif()
+
+# CUHK03 script
+add_executable(run_cuhk03 cuhk03.cpp)
+target_link_libraries(run_cuhk03 idla dlib ${HDF5_LIBRARIES})
 install(TARGETS run_cuhk03 DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 if (BUILD_TEST)
