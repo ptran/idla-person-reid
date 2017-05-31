@@ -25,13 +25,15 @@ cd $THIS_REPOSITORY
 mkdir build
 cd build
 
-cmake -DDLIR_DIR=$PATH_TO_DLIB ..
+cmake .. -DDLIR_DIR=$PATH_TO_DLIB -DGPU_ARCHITECTURE=sm_30
 # ccmake . # Set BUILD_TEST to ON for unit testing. dlib flags can also be set here.
 
 make && make install
 ```
 
-`$PATH_TO_DLIB` represents the path to the *dlib* library directory.
+The `DLIB_DIR` variable informs *CMake* where it should look to find *dlib*. This must be defined as an environment variable or passed into *CMake* through `-DDLIB_DIR`.
+
+The optional variable `GPU_ARCHITECTURE` specifies what compute capability the CUDA code should be built for. By default, this variable is set to `sm_30`, i.e. a compute capability of 3.0. This flag is only valid if *dlib* detects CUDA (i.e. `DLIB_USE_CUDA=ON`).
 
 Details
 -------
