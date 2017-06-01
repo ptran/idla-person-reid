@@ -13,7 +13,7 @@ This code has only been built and tested on *Ubuntu 16.04*.
       - `C++11`-compatible compiler
       - `CUDA 7.5` or greater
       - `cuDNN v5` or greater
-- **CMake** *v2.6+*
+- **CMake** *v2.8.12+*
 - **HDF5** *v1.8.16+*
   - Used for loading the `CUHK03` dataset from a *MATLAB* `mat` file.
 
@@ -25,7 +25,7 @@ cd $THIS_REPOSITORY
 mkdir build
 cd build
 
-cmake .. -DDLIR_DIR=$PATH_TO_DLIB -DGPU_ARCHITECTURE=sm_30
+cmake .. -DDLIB_DIR=$PATH_TO_DLIB -DGPU_ARCHITECTURE=sm_30
 # ccmake . # Set BUILD_TEST to ON for unit testing. dlib flags can also be set here.
 
 make && make install
