@@ -43,7 +43,7 @@ void load_cuhk03_dataset(
     std::ifstream ifs;
     ifs.open(test_path);
     for (int i = 0; i < 20; ++i) {
-        testsets[i].reserve(100);
+        testsets[i].resize(100);
         std::string line;
         std::getline(ifs, line);
         line = dlib::split_on_last(line, "\n").first;
