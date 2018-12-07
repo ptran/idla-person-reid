@@ -1,7 +1,5 @@
-#include <reinterpret.h>
-
+#include <idla/reinterpret.h>
 #include <dlib/dnn.h>
-
 #include "input_test.h"
 #include "dlib_testing_suite/tester.h"
 

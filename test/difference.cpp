@@ -1,9 +1,6 @@
-#include <difference.h>
-
+#include <idla/xnbhd_diff.h>
 #include <utility>
-
 #include <dlib/dnn.h>
-
 #include "input_test.h"
 #include "dlib_testing_suite/tester.h"
 
@@ -16,7 +13,7 @@ namespace
     class test_difference : public tester {
     public:
         test_difference() : tester("test_difference",
-                                   "Runs test on cross neighborhood differences layer")
+                                   "Runs test on cross neighborhood differencing layer")
         { }
 
         void perform_test()
@@ -29,7 +26,7 @@ namespace
                    0.4, 0.5, 0.6,
                    0.7, 0.8, 0.9;
 
-            using net_type = cross_neighborhood_differences<3,3,input_test>;
+            using net_type = xnbhd_diff<3,3,input_test>;
             net_type net;
 
             // =============== //

@@ -1,21 +1,20 @@
-#ifndef IDLA__DIFFERENCE_H_
-#define IDLA__DIFFERENCE_H_
+#ifndef IDLA__XNBHD_DIFF_H_
+#define IDLA__XNBHD_DIFF_H_
 
 #include <cassert>
-
 #include <dlib/dnn.h>
 
 #ifdef DLIB_USE_CUDA
-  #include "difference_impl_gpu.h"
+  #include "xnbhd_diff_impl_gpu.h"
 #else
-  #include "difference_impl_cpu.h"
+  #include "xnbhd_diff_impl_cpu.h"
 #endif // DLIB_USE_CUDA
 
 /*!
     This object represents a cross-input neighborhood differences layer.
 */
 template <long _nr=5, long _nc=5>
-class cross_neighborhood_differences_ {
+class xnbhd_diff_ {
 public:
     const static unsigned int sample_expansion_factor = 1;
 
@@ -24,7 +23,7 @@ public:
     static_assert(_nr % 2 != 0, "The number of rows in the neighborhood region must be an odd number");
     static_assert(_nc % 2 != 0, "The number of columns in the neighborhood region must be an odd number");
 
-    cross_neighborhood_differences_() { }
+    xnbhd_diff_() { }
 
     template <typename SUBNET>
     void setup(const SUBNET& sub)
@@ -43,8 +42,7 @@ public:
         // times more rows and _nc times more columns. This is due to the
         // neighborhood output produced at every pixel.
         const dlib::tensor& input_tensor = sub.get_output();
-        data_output.set_size(input_tensor.num_samples(), input_tensor.k(),
-                             _nr*input_tensor.nr(), _nc*input_tensor.nc());
+        data_output.set_size(input_tensor.num_samples(), input_tensor.k(), _nr*input_tensor.nr(), _nc*input_tensor.nc());
 #ifdef DLIB_USE_CUDA
         launch_differencing_kernel(input_tensor.device(),
                                    data_output.device_write_only(),
@@ -87,43 +85,43 @@ public:
     const dlib::tensor& get_layer_params() const { return params; }
     dlib::tensor& get_layer_params() { return params; }
 
-    friend void serialize(const cross_neighborhood_differences_& item, std::ostream& out)
+    friend void serialize(const xnbhd_diff_& item, std::ostream& out)
     {
-        dlib::serialize("cross_neighborhood_differences", out);
+        dlib::serialize("xnbhd_diff", out);
         dlib::serialize(_nr, out);
         dlib::serialize(_nc, out);
     }
 
-    friend void deserialize(cross_neighborhood_differences_& item, std::istream& in)
+    friend void deserialize(xnbhd_diff_& item, std::istream& in)
     {
         std::string version;
         dlib::deserialize(version, in);
         long nr;
         long nc;
-        if (version == "cross_neighborhood_differences") {
+        if (version == "xnbhd_diff") {
             dlib::deserialize(nr, in);
             dlib::deserialize(nc, in);
         }
         else {
-            throw dlib::serialization_error("Unexpected version '"+version+"' found while deserializing cross_neighborhood_differences_.");
+            throw dlib::serialization_error("Unexpected version '"+version+"' found while deserializing xnbhd_diff_.");
         }
 
-        if (_nr != nr) throw dlib::serialization_error("Wrong nr found while deserializing cross_neighborhood_differences_");
-        if (_nc != nc) throw dlib::serialization_error("Wrong nc found while deserializing cross_neighborhood_differences_");
+        if (_nr != nr) throw dlib::serialization_error("Wrong nr found while deserializing xnbhd_diff_");
+        if (_nc != nc) throw dlib::serialization_error("Wrong nc found while deserializing xnbhd_diff_");
     }
 
-    friend std::ostream& operator<<(std::ostream& out, const cross_neighborhood_differences_& item)
+    friend std::ostream& operator<<(std::ostream& out, const xnbhd_diff_& item)
     {
-        out << "cross_neighborhood_differences\t ("
+        out << "xnbhd_diff\t ("
             << "nr="<<_nr
             << ", nc="<<_nc
             << ")";
         return out;
     }
 
-    friend void to_xml(const cross_neighborhood_differences_& item, std::ostream& out)
+    friend void to_xml(const xnbhd_diff_& item, std::ostream& out)
     {
-        out << "<cross_neighborhood_differences"
+        out << "<xnbhd_diff"
             << " nr='"<<_nr<<"'"
             << " nc='"<<_nc<<"'"
             << "/>\n";
@@ -133,6 +131,6 @@ private:
 };
 
 template <long nr, long nc, typename SUBNET>
-using cross_neighborhood_differences = dlib::add_layer<cross_neighborhood_differences_<nr, nc>, SUBNET>;
+using xnbhd_diff = dlib::add_layer<xnbhd_diff_<nr, nc>, SUBNET>;
 
-#endif // IDLA__DIFFERENCE_H_
+#endif // IDLA__XNBHD_DIFF_H_

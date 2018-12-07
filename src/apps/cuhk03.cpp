@@ -1,50 +1,15 @@
+#include "datasets.h"
+#include <idla/net_def.h>
 #include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <random>
-
 #include <dlib/cmd_line_parser.h>
 #include <dlib/console_progress_indicator.h>
 #include <dlib/dir_nav.h>
 #include <dlib/dnn.h>
 #include <dlib/rand.h>
-
-#include "dataset.h"
-#include "difference.h"
-#include "input.h"
-#include "multiclass_less.h"
-#include "reinterpret.h"
-
-// Neural Network Setup
-// ---------------------------------------------------------------------------
-
-template <
-    long num_filters,
-    long nr,
-    long nc,
-    int stride_y,
-    int stride_x,
-    typename SUBNET
-    >
-using connp = dlib::add_layer<dlib::con_<num_filters,nr,nc,stride_y,stride_x,0,0>, SUBNET>;
-
-template <long N, template <typename> class BN, long shape, long stride, typename SUBNET>
-using block = dlib::relu<BN<connp<N, shape, shape, stride, stride, SUBNET>>>;
-
-template <template <typename> class BN_CON, template <typename> class BN_FC>
-using mod_idla = loss_multiclass_log_lr<dlib::fc<2,
-                                        dlib::relu<BN_FC<dlib::fc<500,reinterpret<2,
-                                        dlib::max_pool<2,2,2,2,block<25,BN_CON,3,1,
-                                        block<25,BN_CON,5,5, // patch summary
-                                        dlib::relu<cross_neighborhood_differences<5,5,
-                                        dlib::max_pool<2,2,2,2,block<25,BN_CON,3,1,block<25,BN_CON,3,1,
-                                        dlib::max_pool<2,2,2,2,block<20,BN_CON,3,1,block<20,BN_CON,3,1,
-                                        input_rgb_image_pair
-                                        >>>>>>>>>>>>>>>>>;
-
-using net_type = mod_idla<dlib::bn_con, dlib::bn_fc>;    // Training Net
-using anet_type = mod_idla<dlib::affine, dlib::affine>;  // Testing Net
 
 // Minibatch Generation
 // ---------------------------------------------------------------------------
@@ -162,8 +127,8 @@ int main(int argc, char* argv[]) try
     std::cout << elapsed_seconds.count() << " seconds to load dataset." << std::endl;
 
     // Start training code
-    net_type net;
-    dlib::dnn_trainer<net_type> trainer(net);
+    train_net_type net;
+    dlib::dnn_trainer<train_net_type> trainer(net);
     trainer.be_verbose();
 
     // Set learning rate schedule
@@ -187,7 +152,7 @@ int main(int argc, char* argv[]) try
     std::string save_name;
     {
         std::ostringstream oss;
-        oss << "cuhk03_" << ((dataset_type == LABELED) ? "labeled" : "detected") << "_modidla";
+        oss << "cuhk03_" << ((dataset_type == LABELED) ? "labeled" : "detected") << "_modified_idla";
         save_name = oss.str();
     }
     trainer.set_synchronization_file(save_name+".dat", std::chrono::seconds(60));
@@ -214,7 +179,7 @@ int main(int argc, char* argv[]) try
     dlib::serialize(save_name+".dnn") << net;
 
     // Test the network on the CUHK03 testing data.
-    dlib::softmax<anet_type::subnet_type> tnet;
+    infer_net_type tnet;
     tnet.subnet() = net.subnet();
     std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
 
@@ -227,7 +192,6 @@ int main(int argc, char* argv[]) try
     int pctr = 0;
     for (auto pid : test_indices) {
         pbar.print_status(pctr++);
-
         const auto& probe_imgs = person_images[pid].first;
         for (const auto& probe_img : probe_imgs) {
             // Count total number of probe images
@@ -283,8 +247,7 @@ int main(int argc, char* argv[]) try
         cmc(i) = static_cast<double>(accumulated_count)/(num_probes*num_trials);
         cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
     }
-    std::cout << "\nCumulative match curve saved to `cmc_cuhk03_modidla.csv`." << std::endl;
-
+    std::cout << "\nCumulative match curve saved to `cmc_cuhk03_modified_idla.csv`." << std::endl;
     return 0;
 }
 catch (std::exception& e)

@@ -1,5 +1,5 @@
-#ifndef IDLA__INPUT_H_
-#define IDLA__INPUT_H_
+#ifndef IDLA__INPUT_PAIR_H_
+#define IDLA__INPUT_PAIR_H_
 
 #include <utility>
 
@@ -98,4 +98,4 @@ void input_rgb_image_pair::to_tensor(
     }
 }
 
-#endif // IDLA__INPUT_H_
+#endif // IDLA__INPUT_PAIR_H_

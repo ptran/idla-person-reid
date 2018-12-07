@@ -1,4 +1,4 @@
-#include "input.h"
+#include "input_pair.h"
 
 void serialize(const input_rgb_image_pair& item, std::ostream& out)
 {

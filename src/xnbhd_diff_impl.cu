@@ -1,4 +1,4 @@
-#include "difference_impl_gpu.h"
+#include "xnbhd_diff_impl_gpu.h"
 #include <sstream>
 
 __global__ void apply_differencing_impl(

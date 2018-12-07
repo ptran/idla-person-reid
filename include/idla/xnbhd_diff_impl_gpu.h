@@ -1,5 +1,5 @@
-#ifndef IDLA__DIFFERENCE_IMPL_GPU_H_
-#define IDLA__DIFFERENCE_IMPL_GPU_H_
+#ifndef IDLA__XNBHD_DIFF_IMPL_GPU_H_
+#define IDLA__XNBHD_DIFF_IMPL_GPU_H_
 
 /*!
     Kernel that performs cross neighborhood differencing.
@@ -52,4 +52,4 @@ void launch_differencing_gradient_kernel(
     long n
 );
 
-#endif // IDLA__DIFFERENCE_IMPL_GPU_H_
+#endif // IDLA__XNBHD_DIFF_IMPL_GPU_H_

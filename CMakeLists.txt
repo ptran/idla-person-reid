@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.1)
 
 project(idla)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-
 option(BUILD_TEST "Determines whether unit tests should be built." OFF)
 set(GPU_ARCHITECTURE "sm_52" CACHE INTERNAL "Target GPU architecture for PTX and SASS code generation.")
 
@@ -41,38 +39,33 @@ else()
 endif()
 
 # Set source code and required libraries for the main application.
-set(source_code
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/input.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/dataset.cpp
-  )
+set(source_code ${CMAKE_CURRENT_SOURCE_DIR}/src/input_pair.cpp)
 
 # Require C++11
 set(CMAKE_CXX_STANDARD 11)
-
 if (${DLIB_USE_CUDA})
-  add_definitions("-DDLIB_USE_CUDA")
-
   # Add CUDA-specific code
   set(source_code
     ${source_code}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/difference_impl.cu
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/xnbhd_diff_impl.cu
     )
 
   find_package(CUDA REQUIRED)
 
   # Set NVCC flags
-  list(APPEND CUDA_NVCC_FLAGS "-arch=${GPU_ARCHITECTURE};-D__STRICT_ANSI__;-D_MWAITXINTRIN_H_INCLUDED;-D_FORCE_INLINES")
+  list(APPEND CUDA_NVCC_FLAGS "-arch=${GPU_ARCHITECTURE}")
   message(STATUS "CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 
   # Build library code
   cuda_include_directories(${DLIB_DIR})
   cuda_add_library(idla STATIC ${source_code})
   target_link_libraries(idla dlib::dlib)
+  target_include_directories(idla PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/idla)
 else()
   # Add CUDA-alternative code
   set(source_code
     ${source_code}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/difference_impl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/xnbhd_diff_impl.cpp
     )
 
   add_library(idla STATIC ${source_code})
@@ -80,9 +73,9 @@ else()
 endif()
 
 # CUHK03 script
-add_executable(run_cuhk03 src/apps/cuhk03.cpp)
+add_executable(run_cuhk03 src/apps/cuhk03.cpp src/apps/datasets.cpp)
 target_link_libraries(run_cuhk03 idla dlib::dlib)
-install(TARGETS run_cuhk03 DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+target_include_directories(run_cuhk03 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if (BUILD_TEST)
   add_subdirectory(test)

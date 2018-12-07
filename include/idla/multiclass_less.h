@@ -3,7 +3,7 @@
 
 #include <dlib/dnn.h>
 
-class loss_multiclass_log_lr_  {
+class loss_multiclass_log_lr_ {
 public:
 #ifdef NEW_DLIB_LOSS    
     typedef unsigned long training_label_type;
@@ -20,7 +20,7 @@ public:
     ) const
     {
         const dlib::tensor& output_tensor = sub.get_output();
-        DLIB_CASSERT(output_tensor.nr() == 1 && output_tensor.nc() == 1 );
+        DLIB_CASSERT(output_tensor.nr() == 1 && output_tensor.nc() == 1);
 
         /* REMOVED CASSERTS */
         // DLIB_CASSERT(sub.sample_expansion_factor() == 1);

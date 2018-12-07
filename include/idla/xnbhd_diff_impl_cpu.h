@@ -1,5 +1,5 @@
-#ifndef IDLA__DIFFERENCE_IMPL_CPU_H_
-#define IDLA__DIFFERENCE_IMPL_CPU_H_
+#ifndef IDLA__XNBHD_DIFF_IMPL_CPU_H_
+#define IDLA__XNBHD_DIFF_IMPL_CPU_H_
 
 #include <dlib/dnn.h>
 #include <dlib/geometry.h>
@@ -30,4 +30,4 @@ void perform_cross_neighborhood_differencing(
 */
 void backpropagate_differencing_gradient(const dlib::tensor& gradient_input, dlib::tensor& gradient_output);
 
-#endif // IDLA__DIFFERENCE_IMPL_CPU_H_
+#endif // IDLA__XNBHD_DIFF_IMPL_CPU_H_
