@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.1)
 
 project(idla)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 option(BUILD_TEST "Determines whether unit tests should be built." OFF)
-set(GPU_ARCHITECTURE "sm_30" CACHE INTERNAL "Target GPU architecture for PTX and SASS code generation.")
+set(GPU_ARCHITECTURE "sm_52" CACHE INTERNAL "Target GPU architecture for PTX and SASS code generation.")
 
 # Find and build the dlib directory
 if (DEFINED DLIB_DIR)
@@ -40,10 +40,6 @@ else()
   message(FATAL_ERROR "dlib must be at least version 19.0.0. ${DLIB_VERSION} found.")
 endif()
 
-# Add HDF5 dependency to this project
-find_package(HDF5 REQUIRED COMPONENTS CXX)
-include_directories(${HDF5_INCLUDE_DIRS})
-
 # Set source code and required libraries for the main application.
 set(source_code
   ${CMAKE_CURRENT_SOURCE_DIR}/src/input.cpp
@@ -51,7 +47,7 @@ set(source_code
   )
 
 # Require C++11
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_STANDARD 11)
 
 if (${DLIB_USE_CUDA})
   add_definitions("-DDLIB_USE_CUDA")
@@ -84,8 +80,8 @@ else()
 endif()
 
 # CUHK03 script
-add_executable(run_cuhk03 cuhk03.cpp)
-target_link_libraries(run_cuhk03 idla dlib::dlib ${HDF5_LIBRARIES})
+add_executable(run_cuhk03 src/apps/cuhk03.cpp)
+target_link_libraries(run_cuhk03 idla dlib::dlib)
 install(TARGETS run_cuhk03 DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 if (BUILD_TEST)

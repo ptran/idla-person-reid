@@ -3,8 +3,6 @@
 #include <fstream>
 #include <iostream>
 #include <random>
-#include <string>
-#include <vector>
 
 #include <dlib/cmd_line_parser.h>
 #include <dlib/console_progress_indicator.h>
@@ -18,6 +16,7 @@
 #include "multiclass_less.h"
 #include "reinterpret.h"
 
+// Neural Network Setup
 // ---------------------------------------------------------------------------
 
 template <
@@ -47,94 +46,82 @@ using mod_idla = loss_multiclass_log_lr<dlib::fc<2,
 using net_type = mod_idla<dlib::bn_con, dlib::bn_fc>;    // Training Net
 using anet_type = mod_idla<dlib::affine, dlib::affine>;  // Testing Net
 
+// Minibatch Generation
 // ---------------------------------------------------------------------------
-
 typedef input_rgb_image_pair::input_type input_type;
 
 struct minibatch {
-    std::vector<input_type> data;
+    std::vector<input_type> image_pairs;
     std::vector<unsigned long> labels;
 };
 
 class minibatch_generator {
 public:
-    minibatch_generator(
-        const std::vector<person_set>& pset_,
-        const std::vector<int>& tidx
-    ) : pset(pset_)
+    minibatch_generator(const std::vector<two_view_images>& images_, const std::vector<std::size_t>& test_indices)
+        : images(images_)
     {
-        for (unsigned long i = 0; i < pset_.size(); ++i) {
-            if (std::find(tidx.begin(), tidx.end(), i) == tidx.end())
-                tridx.push_back(i);
+        for (std::size_t i = 0; i < this->images.size(); ++i) {
+            if (std::find(test_indices.begin(), test_indices.end(), i) == test_indices.end())
+                train_indices.push_back(i);
         }
     }
 
-    minibatch operator()(unsigned long size)
+    minibatch operator()(std::size_t size)
     {
         DLIB_CASSERT(size % 2 == 0, "");
 
-        // Create random sampling object
-        dlib::random_subset_selector<int> samples;
-        bool empty_view = true;
-        while (empty_view) {
+        // Sample training indices
+        dlib::random_subset_selector<std::size_t> samples;
+        while (true) {
             unsigned int seed = rng.get_random_32bit_number();
-            samples = dlib::randomly_subsample(tridx, size, seed);
-
-            empty_view = false;
-            for (unsigned int i = 0; i < size/2; ++i) {
-                unsigned int v0_size = pset[samples[i]].view(0).size();
-                unsigned int pv1_size = pset[samples[i]].view(1).size();
-                unsigned int nv1_size = pset[samples[i+size/2]].view(1).size();
-                if (v0_size == 0 || pv1_size == 0 || nv1_size == 0) {
-                    empty_view = true;
+            samples = dlib::randomly_subsample(train_indices, size, seed);
+            std::size_t i;
+            for (i = 0; i < size/2; ++i) {
+                // Re-sample if the positive image pair and negative gallery image
+                std::size_t p = samples[i];
+                std::size_t n = samples[i+size/2];
+                if (images[p].first.empty() || images[p].second.empty() || images[n].second.empty())
                     break;
-                }
             }
+            if (i >= size/2)
+                break;
         }
 
         // Build minibatch
-        std::vector<std::pair<input_type, unsigned long>> tmp;
+        std::vector<std::pair<input_type, unsigned long>> batch_pairs;
         for (unsigned long i = 0; i < size/2; ++i) {
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& view0 = pset[samples[i]].view(0);
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& pview1 = pset[samples[i]].view(1);
+            std::size_t p = samples[i];
+            std::size_t n = samples[i+size/2];
 
-            // Construct positive pair
-            unsigned int pidx0 = rng.get_random_32bit_number() % view0.size();
-            unsigned int pidx1 = rng.get_random_32bit_number() % pview1.size();
-            const dlib::matrix<dlib::rgb_pixel>& pimg0 = view0[pidx0];
-            const dlib::matrix<dlib::rgb_pixel>& pimg1 = pview1[pidx1];
-            input_type ppair = {&pimg0, &pimg1};
-            tmp.emplace_back(ppair, 1);
+            auto& probe = images[p].first;
+            auto& gallery_p = images[p].second;
 
-            // Construct negative pair
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& nview1 = pset[samples[i+size/2]].view(1);
-            unsigned int nidx0 = rng.get_random_32bit_number() % view0.size();
-            unsigned int nidx1 = rng.get_random_32bit_number() % nview1.size();
+            std::size_t ppi = rng.get_random_32bit_number() % probe.size();
+            std::size_t gpi = rng.get_random_32bit_number() % gallery_p.size();
+            batch_pairs.emplace_back(std::make_pair(&probe[ppi], &gallery_p[gpi]), 1);
 
-            const dlib::matrix<dlib::rgb_pixel>& nimg0 = view0[nidx0];
-            const dlib::matrix<dlib::rgb_pixel>& nimg1 = nview1[nidx1];
-            input_type npair = {&nimg0, &nimg1};
-            tmp.emplace_back(npair, 0);
+            auto& gallery_n = images[n].second;
+            unsigned int pni = rng.get_random_32bit_number() % probe.size();
+            unsigned int gni = rng.get_random_32bit_number() % gallery_n.size();
+            batch_pairs.emplace_back(std::make_pair(&probe[pni], &gallery_n[gni]), 0);
         }
         auto engine = std::default_random_engine{};
-        std::shuffle(std::begin(tmp), std::end(tmp), engine);
+        std::shuffle(std::begin(batch_pairs), std::end(batch_pairs), engine);
 
-        minibatch batch;
-        batch.data.reserve(size);
-        batch.labels.reserve(size);
-        for (auto i : tmp) {
-            batch.data.push_back(i.first);
-            batch.labels.push_back(i.second);
+        minibatch mb;
+        mb.image_pairs.reserve(size);
+        mb.labels.reserve(size);
+        for (auto bp : batch_pairs) {
+            mb.image_pairs.push_back(std::move(bp.first));
+            mb.labels.push_back(std::move(bp.second));
         }
-        return batch;
+        return mb;
     }
 private:
     dlib::rand rng;
-    const std::vector<person_set>& pset; 
-    std::vector<int> tridx;                //  training index
+    const std::vector<two_view_images>& images;
+    std::vector<std::size_t> train_indices;
 };
-
-// ---------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) try
 {
@@ -159,33 +146,19 @@ int main(int argc, char* argv[]) try
 
     // Load in dataset and time it
     std::string cuhk03_dir = parser.option("i").argument();
-#if defined _WIN32
-    char os_delim = '\\';
-#else
-    char os_delim = '/';
-#endif
-    if (cuhk03_dir.back() != os_delim) {
-        cuhk03_dir += os_delim;
-    }
+    cuhk03_dataset_type dataset_type = parser.option("detected") ? DETECTED : LABELED;
+    std::cout << "Attempting to load the CUHK03 "
+              << ((dataset_type == LABELED) ? "labeled" : "detected")
+              << " dataset from '" << cuhk03_dir << "' [should take up to 5 seconds in release mode]..."
+              << std::endl;
 
-    cuhk03_dataset_type dset_type = parser.option("detected") ? DETECTED : LABELED;
-    std::cout << "Attempting to load the CUHK03 " << ((dset_type == LABELED) ? "labeled" : "detected")
-              << " dataset from '" << cuhk03_dir << "' [should take up to 15 seconds in release mode]..." << std::endl;
+    std::vector<two_view_images> person_images;
+    std::vector<std::vector<std::size_t>> testsets;
 
-    if (!dlib::file_exists(cuhk03_dir+"cuhk-03.mat")) {
-        throw std::runtime_error("'"+cuhk03_dir+"' does not contain cuhk-03.mat.");
-    }
-
-    // CUHK03 dataset
-    std::vector<person_set> pset;
-    std::vector<std::vector<int>> test_protocols;
-
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
-    load_cuhk03_dataset(cuhk03_dir+"cuhk-03.mat", pset, test_protocols, dset_type);
-    end = std::chrono::system_clock::now();
-
-    std::chrono::duration<double> elapsed_seconds = end-start;
+    auto start = std::chrono::system_clock::now();
+    load_cuhk03_dataset(cuhk03_dir, person_images, testsets, dataset_type);
+    auto stop = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = stop-start;
     std::cout << elapsed_seconds.count() << " seconds to load dataset." << std::endl;
 
     // Start training code
@@ -214,7 +187,7 @@ int main(int argc, char* argv[]) try
     std::string save_name;
     {
         std::ostringstream oss;
-        oss << "cuhk03_" << ((dset_type == LABELED) ? "labeled" : "detected") << "_modidla";
+        oss << "cuhk03_" << ((dataset_type == LABELED) ? "labeled" : "detected") << "_modidla";
         save_name = oss.str();
     }
     trainer.set_synchronization_file(save_name+".dat", std::chrono::seconds(60));
@@ -222,14 +195,16 @@ int main(int argc, char* argv[]) try
     // Prepare data
     long batch_size = 128;
     dlib::rand rng(0);
-    unsigned int test_index = rng.get_random_32bit_number() % 20;
-    minibatch_generator batchgen(pset, test_protocols[test_index]);
+    auto& test_indices = testsets[rng.get_random_32bit_number() % 20];
+    minibatch_generator batchgen(person_images, test_indices);
 
     // Train neural network
-    std::cout << std::endl << net << std::endl;
+    std::cout << std::endl
+              << net
+              << std::endl;
     while (trainer.get_train_one_step_calls() < max_iterations) {
-        minibatch batch = batchgen(batch_size);
-        trainer.train_one_step(batch.data.begin(), batch.data.end(), batch.labels.begin());
+        minibatch mb = batchgen(batch_size);
+        trainer.train_one_step(mb.image_pairs.begin(), mb.image_pairs.end(), mb.labels.begin());
     }
     trainer.get_net();
 
@@ -244,58 +219,51 @@ int main(int argc, char* argv[]) try
     std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
 
     // Use the specified test indices for evaluation
-    const std::vector<int>& test_protocol = test_protocols[test_index];
-    std::vector<int> ranked_counter(test_protocol.size(), 0);
+    std::vector<int> ranked_counter(test_indices.size(), 0);
     int num_probes = 0;
 
     const int num_trials = 100;
-    dlib::console_progress_indicator pbar(test_protocol.size());
-    for (unsigned int i = 0; i < test_protocol.size(); ++i) {
-        // Specify the current probe ID
-        int pid = test_protocol[i];
+    dlib::console_progress_indicator pbar(test_indices.size());
+    int pctr = 0;
+    for (auto pid : test_indices) {
+        pbar.print_status(pctr++);
 
-        pbar.print_status(i);
-        const std::vector<dlib::matrix<dlib::rgb_pixel>>& probe_imgs = pset[pid].view(0);
-        for (const dlib::matrix<dlib::rgb_pixel>& probe_img : probe_imgs) {
+        const auto& probe_imgs = person_images[pid].first;
+        for (const auto& probe_img : probe_imgs) {
+            // Count total number of probe images
             ++num_probes;
-
-            std::vector<std::vector<std::pair<float,int>>> trials(num_trials);
-            for (int t = 0; t < num_trials; ++t) {
-                trials[t].reserve(test_protocol.size());
-            }
-
-            for (unsigned int j = 0; j < test_protocol.size(); ++j) {
-                int gid = test_protocol[j];
-                const std::vector<dlib::matrix<dlib::rgb_pixel>>& gallery_imgs = pset[gid].view(1);
-
+            std::vector<std::vector<std::pair<float, std::size_t>>> trials(num_trials);
+            for (auto gid : test_indices) {
+                const auto& gallery_imgs = person_images[gid].second;
                 std::vector<input_type> img_pairs;
                 img_pairs.reserve(gallery_imgs.size());
-                for (const dlib::matrix<dlib::rgb_pixel>& gallery_img : gallery_imgs) {
+                for (const auto& gallery_img : gallery_imgs) {
                     img_pairs.emplace_back(&probe_img, &gallery_img);
                 }
 
-                // Randomly choose one pairwise score to represent the current
-                // gallery ID
+                // Randomly choose one pairwise score to represent the current gallery person ID for each trial
                 dlib::matrix<float> output = dlib::mat(tnet(img_pairs.begin(), img_pairs.end()));
-
                 for (auto& trial : trials) {
-                    int tmp = rng.get_random_32bit_number() % output.nr();
-                    trial.emplace_back(output(tmp, 1), gid);
+                    int rnd_idx = rng.get_random_32bit_number() % output.nr();
+                    float score = output(rnd_idx, 1);
+                    trial.emplace_back(score, gid);
                 }
             }
-
+            // Each trial contains score and gallery ID pairs
             for (auto& trial : trials) {
                 // Sort score and ID pairs and scan for the matching ID
                 std::sort(trial.begin(), trial.end(),
-                          [](const std::pair<double,int>& i, const std::pair<double,int>& j) -> bool
+                          [](const std::pair<float, int>& a, const std::pair<float, int>& b) -> bool
                           {
-                              return i.first > j.first;
+                              return a.first > b.first;
                           });
 
                 // Find the first occurrence of the same ID person
-                for (unsigned int j = 0; j < trial.size(); ++j) {
-                    if (pid == trial[j].second) {
-                        ++ranked_counter[j];
+                for (std::size_t i = 0; i < trial.size(); ++i) {
+                    auto& score_pair = trial[i];
+                    auto gid = score_pair.second;
+                    if (pid == gid) {
+                        ++ranked_counter[i];
                         break;
                     }
                 }
@@ -310,7 +278,7 @@ int main(int argc, char* argv[]) try
 
     std::ofstream cmc_file;
     cmc_file.open("cmc_"+save_name+".csv");
-    for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
+    for (std::size_t i = 0; i < ranked_counter.size(); ++i) {
         accumulated_count += ranked_counter[i];
         cmc(i) = static_cast<double>(accumulated_count)/(num_probes*num_trials);
         cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
