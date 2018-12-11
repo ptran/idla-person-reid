@@ -5,11 +5,75 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <tuple>
 #include <dlib/cmd_line_parser.h>
 #include <dlib/console_progress_indicator.h>
 #include <dlib/dir_nav.h>
 #include <dlib/dnn.h>
 #include <dlib/rand.h>
+#include <dlib/statistics.h>
+
+#include <dlib/gui_widgets.h>
+
+// Utility Functions
+// ---------------------------------------------------------------------------
+dlib::rand rng(0);
+
+void get_dataset_split(
+    std::size_t nimages,
+    const std::vector<std::size_t>& test_indices,
+    std::vector<std::size_t>& train_indices,
+    std::vector<std::size_t>& val_indices
+)
+{
+    train_indices.reserve(1267);
+    dlib::random_subset_selector<std::size_t> sampler;
+    sampler.set_max_size(100);
+    for (std::size_t i = 0; i < nimages; ++i) {
+        if (std::find(test_indices.begin(), test_indices.end(), i) == test_indices.end()) {
+            if (sampler.next_add_accepts()) {
+                sampler.add(i);
+            }
+            else {
+                sampler.add();
+                train_indices.push_back(i);
+            }
+        }
+    }
+    val_indices = sampler.to_std_vector();
+}
+
+void get_color_stats(
+    const dlib::array<two_view_images>& images,
+    const std::vector<std::size_t>& train_indices,
+    std::tuple<float, float, float>& mean,
+    std::tuple<float, float, float>& stddev
+)
+{
+    dlib::running_stats<double> red_stats;
+    dlib::running_stats<double> green_stats;
+    dlib::running_stats<double> blue_stats;
+
+    for (std::size_t idx : train_indices) {
+        for (const auto& img : images[idx].first) {
+            for (auto it = img.begin(); it != img.end(); ++it) {
+                red_stats.add(static_cast<float>(it->red));
+                green_stats.add(static_cast<float>(it->green));
+                blue_stats.add(static_cast<float>(it->blue));
+            }
+        }
+        for (const auto& img : images[idx].second) {
+            for (auto it = img.begin(); it != img.end(); ++it) {
+                red_stats.add(static_cast<float>(it->red));
+                green_stats.add(static_cast<float>(it->green));
+                blue_stats.add(static_cast<float>(it->blue));
+            }
+        }
+    }
+
+    mean = std::make_tuple(red_stats.mean(), green_stats.mean(), blue_stats.mean());
+    stddev = std::make_tuple(red_stats.stddev(), green_stats.stddev(), blue_stats.stddev());
+}
 
 // Minibatch Generation
 // ---------------------------------------------------------------------------
@@ -22,14 +86,9 @@ struct minibatch {
 
 class minibatch_generator {
 public:
-    minibatch_generator(const std::vector<two_view_images>& images_, const std::vector<std::size_t>& test_indices)
-        : images(images_)
-    {
-        for (std::size_t i = 0; i < this->images.size(); ++i) {
-            if (std::find(test_indices.begin(), test_indices.end(), i) == test_indices.end())
-                train_indices.push_back(i);
-        }
-    }
+    minibatch_generator(const dlib::array<two_view_images>& images_, const std::vector<std::size_t>& train_indices_)
+        : images(images_), train_indices(train_indices_)
+    { }
 
     minibatch operator()(std::size_t size)
     {
@@ -45,7 +104,7 @@ public:
                 // Re-sample if the positive image pair and negative gallery image
                 std::size_t p = samples[i];
                 std::size_t n = samples[i+size/2];
-                if (images[p].first.empty() || images[p].second.empty() || images[n].second.empty())
+                if (images[p].first.size() == 0 || images[p].second.size() == 0 || images[n].second.size() == 0)
                     break;
             }
             if (i >= size/2)
@@ -58,20 +117,18 @@ public:
             std::size_t p = samples[i];
             std::size_t n = samples[i+size/2];
 
-            auto& probe = images[p].first;
-            auto& gallery_p = images[p].second;
+            const auto& probe = images[p].first;
+            const auto& gallery_p = images[p].second;
 
             std::size_t ppi = rng.get_random_32bit_number() % probe.size();
             std::size_t gpi = rng.get_random_32bit_number() % gallery_p.size();
-            batch_pairs.emplace_back(std::make_pair(&probe[ppi], &gallery_p[gpi]), 1);
+            batch_pairs.emplace_back(std::make_pair(transform(probe[ppi]), transform(gallery_p[gpi])), 1);
 
-            auto& gallery_n = images[n].second;
+            const auto& gallery_n = images[n].second;
             unsigned int pni = rng.get_random_32bit_number() % probe.size();
             unsigned int gni = rng.get_random_32bit_number() % gallery_n.size();
-            batch_pairs.emplace_back(std::make_pair(&probe[pni], &gallery_n[gni]), 0);
+            batch_pairs.emplace_back(std::make_pair(transform(probe[pni]), transform(gallery_n[gni])), 0);
         }
-        auto engine = std::default_random_engine{};
-        std::shuffle(std::begin(batch_pairs), std::end(batch_pairs), engine);
 
         minibatch mb;
         mb.image_pairs.reserve(size);
@@ -83,9 +140,24 @@ public:
         return mb;
     }
 private:
-    dlib::rand rng;
-    const std::vector<two_view_images>& images;
+    const dlib::array<two_view_images>& images;
     std::vector<std::size_t> train_indices;
+
+    dlib::matrix<dlib::rgb_pixel> transform(const rgb_image& img)
+    {
+        rgb_image transformed;
+        const auto rect = dlib::get_rect(img);
+        const dlib::point tvec = dlib::dpoint(rng.get_double_in_range(-0.05, 0.05)*rect.width(),
+                                              rng.get_double_in_range(-0.05, 0.05)*rect.height());
+        auto crop_rect = dlib::centered_rect(dlib::center(rect)+tvec, rect.width(), rect.height());
+        crop_rect = crop_rect.intersect(rect);
+
+        extract_image_chip(img, dlib::chip_details(crop_rect, dlib::chip_dims(160, 60)), transformed);
+        if (rng.get_random_double() > 0.5)
+            flip_image_left_right(transformed);
+
+        return dlib::mat(transformed);
+    }
 };
 
 int main(int argc, char* argv[]) try
@@ -117,17 +189,37 @@ int main(int argc, char* argv[]) try
               << " dataset from '" << cuhk03_dir << "' [should take up to 5 seconds in release mode]..."
               << std::endl;
 
-    std::vector<two_view_images> person_images;
+    dlib::array<two_view_images> person_images;
     std::vector<std::vector<std::size_t>> testsets;
 
-    auto start = std::chrono::system_clock::now();
+    auto load_start = std::chrono::system_clock::now();
     load_cuhk03_dataset(cuhk03_dir, person_images, testsets, dataset_type);
-    auto stop = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = stop-start;
+    auto load_stop = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = load_stop-load_start;
     std::cout << elapsed_seconds.count() << " seconds to load dataset." << std::endl;
 
-    // Start training code
+    // Split dataset into train, validation, and test
+    std::vector<std::size_t> test_indices = testsets[rng.get_random_32bit_number() % 20];
+    std::vector<std::size_t> train_indices;
+    std::vector<std::size_t> val_indices;
+    get_dataset_split(person_images.size(), test_indices, train_indices, val_indices); 
+
+    // Get training dataset statistics
+    std::cout << "Finding image statistics..." << std::endl;
+    auto stats_start = std::chrono::system_clock::now();
+    std::tuple<float, float, float> mean;
+    std::tuple<float, float, float> stddev;
+    get_color_stats(person_images, train_indices, mean, stddev);
+    auto stats_stop = std::chrono::system_clock::now();
+    elapsed_seconds = stats_stop-stats_start;
+    std::cout << elapsed_seconds.count() << " seconds to get statistics." << std::endl;
+
+    // Instantiate training network
     train_net_type net;
+    dlib::input_layer(net) = input_rgb_image_pair(std::get<0>(mean), std::get<1>(mean), std::get<2>(mean),
+                                                  std::get<0>(stddev), std::get<1>(stddev), std::get<2>(stddev));
+
+    // Start training code
     dlib::dnn_trainer<train_net_type> trainer(net);
     trainer.be_verbose();
 
@@ -159,9 +251,7 @@ int main(int argc, char* argv[]) try
 
     // Prepare data
     long batch_size = 128;
-    dlib::rand rng(0);
-    auto& test_indices = testsets[rng.get_random_32bit_number() % 20];
-    minibatch_generator batchgen(person_images, test_indices);
+    minibatch_generator batchgen(person_images, train_indices);
 
     // Train neural network
     std::cout << std::endl
@@ -190,19 +280,24 @@ int main(int argc, char* argv[]) try
     const int num_trials = 100;
     dlib::console_progress_indicator pbar(test_indices.size());
     int pctr = 0;
+    rgb_image resized(160, 60);
     for (auto pid : test_indices) {
         pbar.print_status(pctr++);
         const auto& probe_imgs = person_images[pid].first;
         for (const auto& probe_img : probe_imgs) {
             // Count total number of probe images
             ++num_probes;
+            dlib::resize_image(probe_img, resized);
+            dlib::matrix<dlib::rgb_pixel> probe_mat = dlib::mat(resized);
             std::vector<std::vector<std::pair<float, std::size_t>>> trials(num_trials);
             for (auto gid : test_indices) {
                 const auto& gallery_imgs = person_images[gid].second;
                 std::vector<input_type> img_pairs;
                 img_pairs.reserve(gallery_imgs.size());
                 for (const auto& gallery_img : gallery_imgs) {
-                    img_pairs.emplace_back(&probe_img, &gallery_img);
+                    dlib::resize_image(gallery_img, resized);
+                    dlib::matrix<dlib::rgb_pixel> gallery_mat = dlib::mat(resized);
+                    img_pairs.push_back(std::move(std::make_pair(probe_mat, gallery_mat)));
                 }
 
                 // Randomly choose one pairwise score to represent the current gallery person ID for each trial

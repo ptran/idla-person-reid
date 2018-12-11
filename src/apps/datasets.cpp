@@ -7,11 +7,9 @@
 
 void load_cuhk03_dataset(
     std::string dirpath,
-    std::vector<two_view_images>& person_images,
+    dlib::array<two_view_images>& person_images,
     std::vector<std::vector<std::size_t>>& testsets,
-    cuhk03_dataset_type dataset_type,
-    long nr,
-    long nc
+    cuhk03_dataset_type dataset_type
 )
 {
     person_images.resize(1467);
@@ -28,12 +26,8 @@ void load_cuhk03_dataset(
         dlib::array2d<dlib::rgb_pixel> img;
         dlib::load_image(img, f.full_name());
 
-        // Resize based on input
-        dlib::array2d<dlib::rgb_pixel> resized(nr, nc);
-        dlib::resize_image(img, resized);
-
         auto& view_imgs = (vid < 5) ? person_images[pid].first : person_images[pid].second;
-        view_imgs.push_back(dlib::mat(resized));
+        view_imgs.push_back(img);
     }
 
     // Load test indices 
