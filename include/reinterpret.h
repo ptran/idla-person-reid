@@ -5,6 +5,10 @@
 
 #include <dlib/dnn.h>
 
+#ifdef DLIB_USE_CUDA
+#include <cuda_runtime.h>
+#endif
+
 /*!
     Reinterprets N-length samples as single samples with N-times the number of 
     channels.
