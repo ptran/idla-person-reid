@@ -1,0 +1,56 @@
+# --- Stage 1: Dependencies ---
+FROM ubuntu:24.04 AS deps
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install essential build tools and dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libopenblas-dev \
+    libhdf5-serial-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dlib v20.0 with no GUI support and OpenBLAS
+WORKDIR /opt
+RUN git clone --branch v20.0 --depth 1 https://github.com/davisking/dlib.git \
+    && cd dlib \
+    && mkdir build && cd build \
+    && cmake .. \
+        -DDLIB_NO_GUI_SUPPORT=ON \
+        -DDLIB_USE_BLAS=ON \
+        -DDLIB_PNG_SUPPORT=ON \
+        -DDLIB_JPEG_SUPPORT=ON \
+    && make -j$(nproc) && make install
+
+# --- Stage 2: Builder ---
+FROM deps AS builder
+
+WORKDIR /app
+COPY . .
+
+# Build and verify the project
+RUN mkdir build && cd build \
+    && cmake .. -DBUILD_TEST=ON \
+    && make -j$(nproc) \
+    && ./test/dtest --runall
+
+# --- Stage 3: Test (Slim CI Artifact) ---
+FROM ubuntu:24.04 AS test
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libopenblas0 \
+    libhdf5-serial-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binaries from builder. These are now "verified" because the build succeeded.
+COPY --from=builder /app/build/test/dtest .
+COPY --from=builder /app/build/run_cuhk03 .
+
+# Default command: run the unit tests
+CMD ["./dtest", "--runall"]

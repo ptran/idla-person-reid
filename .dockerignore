@@ -1,0 +1,5 @@
+build/
+.git/
+*.dat
+*.dnn
+*.csv
