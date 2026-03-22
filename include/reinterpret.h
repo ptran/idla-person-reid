@@ -32,7 +32,11 @@ public:
         long nc = sub.get_output().nc();
         data_output.set_size(n/N, k*N, nr, nc);
 
-        memcpy(data_output, sub.get_output());
+#ifdef DLIB_USE_CUDA
+        cudaMemcpy(data_output.device(), sub.get_output().device(), data_output.size()*sizeof(float), cudaMemcpyDeviceToDevice);
+#else
+        memcpy(data_output.host(), sub.get_output().host(), data_output.size()*sizeof(float));
+#endif
     }
 
     template <typename SUBNET>
@@ -42,7 +46,11 @@ public:
         dlib::tensor& // params_grad
     )
     {
-        memcpy(sub.get_gradient_input(), gradient_input);
+#ifdef DLIB_USE_CUDA
+        cudaMemcpy(sub.get_gradient_input().device(), gradient_input.device(), gradient_input.size()*sizeof(float), cudaMemcpyDeviceToDevice);
+#else
+        memcpy(sub.get_gradient_input().host(), gradient_input.host(), gradient_input.size()*sizeof(float));
+#endif
     }
 
     const dlib::tensor& get_layer_params() const { return params; }

@@ -15,7 +15,7 @@
 #include "dataset.h"
 #include "difference.h"
 #include "input.h"
-#include "multiclass_less.h"
+#include "multiclass_loss.h"
 #include "reinterpret.h"
 
 // ---------------------------------------------------------------------------
