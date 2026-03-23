@@ -1,5 +1,5 @@
-#ifndef IDLA__MULTICLASS_LESS_H_
-#define IDLA__MULTICLASS_LESS_H_
+#ifndef IDLA__MULTICLASS_LOSS_H_
+#define IDLA__MULTICLASS_LOSS_H_
 
 #include <dlib/dnn.h>
 
@@ -54,21 +54,39 @@ public:
         // DLIB_CASSERT(input_tensor.num_samples() == grad.num_samples());
         // DLIB_CASSERT(input_tensor.num_samples() == output_tensor.num_samples());
 
-        dlib::tt::softmax(grad, output_tensor);
-
         // The loss we output is the average loss over the mini-batch.
         const double scale = 1.0/output_tensor.num_samples();
         double loss = 0;
         float* g = grad.host();
+        const float* out = output_tensor.host();
         for (long i = 0; i < output_tensor.num_samples(); ++i) {
             const long y = (long)*truth++;
+
+            // Compute softmax for the current sample
+            float max_val = out[i*output_tensor.k()];
+            for (long k = 1; k < output_tensor.k(); ++k) {
+                if (out[i*output_tensor.k()+k] > max_val)
+                    max_val = out[i*output_tensor.k()+k];
+            }
+
+            float sum = 0;
+            for (long k = 0; k < output_tensor.k(); ++k) {
+                g[i*output_tensor.k()+k] = std::exp(out[i*output_tensor.k()+k] - max_val);
+                sum += g[i*output_tensor.k()+k];
+            }
+
+            for (long k = 0; k < output_tensor.k(); ++k) {
+                g[i*output_tensor.k()+k] /= sum;
+            }
+
             // The network must produce a number of outputs that is equal to the number
             // of labels when using this type of loss.
             DLIB_CASSERT(y < output_tensor.k(), "y: " << y << ", output_tensor.k(): " << output_tensor.k());
+
             for (long k = 0; k < output_tensor.k(); ++k) {
                 const unsigned long idx = i*output_tensor.k()+k;
                 if (k == y) {
-                    loss += scale*-std::log(g[idx]);
+                    loss += scale*-std::log(std::max(g[idx], 1e-7f));
                     g[idx] = scale*(g[idx]-1);
                 }
                 else {
@@ -107,4 +125,4 @@ public:
 template <typename SUBNET>
 using loss_multiclass_log_lr = dlib::add_loss_layer<loss_multiclass_log_lr_, SUBNET>;
 
-#endif // IDLA__MULTICLASS_LESS_H_
+#endif // IDLA__MULTICLASS_LOSS_H_

@@ -12,40 +12,8 @@
 #include <dlib/dnn.h>
 #include <dlib/rand.h>
 
+#include "network.h"
 #include "dataset.h"
-#include "difference.h"
-#include "input.h"
-#include "multiclass_less.h"
-#include "reinterpret.h"
-
-// ---------------------------------------------------------------------------
-
-template <
-    long num_filters,
-    long nr,
-    long nc,
-    int stride_y,
-    int stride_x,
-    typename SUBNET
-    >
-using connp = dlib::add_layer<dlib::con_<num_filters,nr,nc,stride_y,stride_x,0,0>, SUBNET>;
-
-template <long N, template <typename> class BN, long shape, long stride, typename SUBNET>
-using block = dlib::relu<BN<connp<N, shape, shape, stride, stride, SUBNET>>>;
-
-template <template <typename> class BN_CON, template <typename> class BN_FC>
-using mod_idla = loss_multiclass_log_lr<dlib::fc<2,
-                                        dlib::relu<BN_FC<dlib::fc<500,reinterpret<2,
-                                        dlib::max_pool<2,2,2,2,block<25,BN_CON,3,1,
-                                        block<25,BN_CON,5,5, // patch summary
-                                        dlib::relu<cross_neighborhood_differences<5,5,
-                                        dlib::max_pool<2,2,2,2,block<25,BN_CON,3,1,block<25,BN_CON,3,1,
-                                        dlib::max_pool<2,2,2,2,block<20,BN_CON,3,1,block<20,BN_CON,3,1,
-                                        input_rgb_image_pair
-                                        >>>>>>>>>>>>>>>>>;
-
-using net_type = mod_idla<dlib::bn_con, dlib::bn_fc>;    // Training Net
-using anet_type = mod_idla<dlib::affine, dlib::affine>;  // Testing Net
 
 // ---------------------------------------------------------------------------
 
@@ -82,50 +50,39 @@ public:
 
             empty_view = false;
             for (unsigned int i = 0; i < size/2; ++i) {
-                unsigned int v0_size = pset[samples[i]].view(0).size();
-                unsigned int pv1_size = pset[samples[i]].view(1).size();
-                unsigned int nv1_size = pset[samples[i+size/2]].view(1).size();
-                if (v0_size == 0 || pv1_size == 0 || nv1_size == 0) {
+                const auto& v0 = pset[samples[i]].view(0);
+                const auto& v1p = pset[samples[i]].view(1);
+                const auto& v1n = pset[samples[i+size/2]].view(1);
+                if (v0.size() == 0 || v1p.size() == 0 || v1n.size() == 0) {
                     empty_view = true;
                     break;
                 }
             }
         }
 
-        // Build minibatch
-        std::vector<std::pair<input_type, unsigned long>> tmp;
-        for (unsigned long i = 0; i < size/2; ++i) {
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& view0 = pset[samples[i]].view(0);
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& pview1 = pset[samples[i]].view(1);
-
-            // Construct positive pair
-            unsigned int pidx0 = rng.get_random_32bit_number() % view0.size();
-            unsigned int pidx1 = rng.get_random_32bit_number() % pview1.size();
-            const dlib::matrix<dlib::rgb_pixel>& pimg0 = view0[pidx0];
-            const dlib::matrix<dlib::rgb_pixel>& pimg1 = pview1[pidx1];
-            input_type ppair = {&pimg0, &pimg1};
-            tmp.emplace_back(ppair, 1);
-
-            // Construct negative pair
-            const std::vector<dlib::matrix<dlib::rgb_pixel>>& nview1 = pset[samples[i+size/2]].view(1);
-            unsigned int nidx0 = rng.get_random_32bit_number() % view0.size();
-            unsigned int nidx1 = rng.get_random_32bit_number() % nview1.size();
-
-            const dlib::matrix<dlib::rgb_pixel>& nimg0 = view0[nidx0];
-            const dlib::matrix<dlib::rgb_pixel>& nimg1 = nview1[nidx1];
-            input_type npair = {&nimg0, &nimg1};
-            tmp.emplace_back(npair, 0);
-        }
-        auto engine = std::default_random_engine{};
-        std::shuffle(std::begin(tmp), std::end(tmp), engine);
-
         minibatch batch;
         batch.data.reserve(size);
         batch.labels.reserve(size);
-        for (auto i : tmp) {
-            batch.data.push_back(i.first);
-            batch.labels.push_back(i.second);
+
+        for (unsigned int i = 0; i < size/2; ++i) {
+            // Pick random indices
+            const auto& view0 = pset[samples[i]].view(0);
+            const auto& view1p = pset[samples[i]].view(1);
+            const auto& view1n = pset[samples[i+size/2]].view(1);
+
+            unsigned int pidx0 = rng.get_random_32bit_number() % view0.size();
+            unsigned int pidx1 = rng.get_random_32bit_number() % view1p.size();
+            unsigned int nidx1 = rng.get_random_32bit_number() % view1n.size();
+
+            // Positive pair
+            batch.data.push_back({&view0[pidx0], &view1p[pidx1]});
+            batch.labels.push_back(1);
+
+            // Negative pair (uses same view0)
+            batch.data.push_back({&view0[pidx0], &view1n[nidx1]});
+            batch.labels.push_back(0);
         }
+
         return batch;
     }
 private:
@@ -138,6 +95,18 @@ private:
 
 int main(int argc, char* argv[]) try
 {
+    // Memory-saving flag recommended by dlib documentation for OOM issues
+    dlib::set_dnn_prefer_smallest_algorithms();
+
+    // --- EAGER MEMORY ALLOCATION ---
+    // Instantiate network and trainer FIRST to secure contiguous pinned memory 
+    // before the heap is fragmented by thousands of small dataset matrices.
+    net_type net;
+    dlib::dnn_trainer<net_type, dlib::adam> trainer(net, dlib::adam(0.0005, 0.9, 0.999));
+    trainer.set_mini_batch_size(32); 
+    trainer.be_verbose();
+    trainer.set_learning_rate(0.001);
+
     dlib::command_line_parser parser;
     parser.add_option("i", "Directory holding the CUHK03 dataset", 1);
     parser.add_option("detected", "Indicates the 'detected' dataset should be used. 'labeled' is used by default.");
@@ -152,57 +121,30 @@ int main(int argc, char* argv[]) try
     }
 
     if (!parser.option("i")) {
-        std::cout << "You must specify the i option (input directory).\n";
-        std::cout << "\n Try the -h option for more information." << std::endl;
-        return 0;
+        std::cout << "Error: You must provide the CUHK03 dataset directory with the -i option.\n";
+        return 1;
     }
 
-    // Load in dataset and time it
-    std::string cuhk03_dir = parser.option("i").argument();
-#if defined _WIN32
-    char os_delim = '\\';
-#else
-    char os_delim = '/';
-#endif
-    if (cuhk03_dir.back() != os_delim) {
-        cuhk03_dir += os_delim;
-    }
+    const std::string cuhk03_dir = parser.option("i").argument();
+    const std::string cuhk03_file = cuhk03_dir + "/cuhk-03.mat";
 
     cuhk03_dataset_type dset_type = parser.option("detected") ? DETECTED : LABELED;
     std::cout << "Attempting to load the CUHK03 " << ((dset_type == LABELED) ? "labeled" : "detected")
-              << " dataset from '" << cuhk03_dir << "' [should take up to 15 seconds in release mode]..." << std::endl;
+              << " dataset from '" << cuhk03_dir << "/'..." << std::endl;
 
-    if (!dlib::file_exists(cuhk03_dir+"cuhk-03.mat")) {
-        throw std::runtime_error("'"+cuhk03_dir+"' does not contain cuhk-03.mat.");
-    }
-
-    // CUHK03 dataset
+    // Load dataset references
     std::vector<person_set> pset;
     std::vector<std::vector<int>> test_protocols;
-
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
-    load_cuhk03_dataset(cuhk03_dir+"cuhk-03.mat", pset, test_protocols, dset_type);
-    end = std::chrono::system_clock::now();
-
-    std::chrono::duration<double> elapsed_seconds = end-start;
-    std::cout << elapsed_seconds.count() << " seconds to load dataset." << std::endl;
-
-    // Start training code
-    net_type net;
-    dlib::dnn_trainer<net_type> trainer(net);
-    trainer.be_verbose();
+    load_cuhk03_dataset(cuhk03_file, pset, test_protocols, dset_type);
 
     // Set learning rate schedule
-    unsigned long max_iterations = 210000;
-    unsigned long current_iteration = trainer.get_train_one_step_calls();
+    const unsigned long max_iterations = 50000;
+    const unsigned long current_iteration = trainer.get_train_one_step_calls();
 
     dlib::matrix<double,0,1> inverse_learning_rate_schedule;
     inverse_learning_rate_schedule.set_size(max_iterations-current_iteration);
 
-    double learning_rate = 0.01;
-    trainer.set_learning_rate(learning_rate);
-
+    double learning_rate = 0.001;
     double gamma = 0.0001;
     double power = 0.75;
     for (unsigned long i = current_iteration; i < max_iterations; ++i) {
@@ -220,7 +162,7 @@ int main(int argc, char* argv[]) try
     trainer.set_synchronization_file(save_name+".dat", std::chrono::seconds(60));
 
     // Prepare data
-    long batch_size = 128;
+    long batch_size = 32;
     dlib::rand rng(0);
     unsigned int test_index = rng.get_random_32bit_number() % 20;
     minibatch_generator batchgen(pset, test_protocols[test_index]);
@@ -238,61 +180,44 @@ int main(int argc, char* argv[]) try
     std::cout << "Saving network..." << std::endl;
     dlib::serialize(save_name+".dnn") << net;
 
-    // Test the network on the CUHK03 testing data.
+    // Evaluation
     dlib::softmax<anet_type::subnet_type> tnet;
     tnet.subnet() = net.subnet();
     std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
 
-    // Use the specified test indices for evaluation
-    const std::vector<int>& test_protocol = test_protocols[test_index];
-    std::vector<int> ranked_counter(test_protocol.size(), 0);
+    std::vector<int> ranked_counter(test_protocols[test_index].size(), 0);
     int num_probes = 0;
 
     const int num_trials = 100;
-    dlib::console_progress_indicator pbar(test_protocol.size());
-    for (unsigned int i = 0; i < test_protocol.size(); ++i) {
-        // Specify the current probe ID
-        int pid = test_protocol[i];
-
+    dlib::console_progress_indicator pbar(test_protocols[test_index].size());
+    for (unsigned int i = 0; i < test_protocols[test_index].size(); ++i) {
+        int pid = test_protocols[test_index][i];
         pbar.print_status(i);
-        const std::vector<dlib::matrix<dlib::rgb_pixel>>& probe_imgs = pset[pid].view(0);
-        for (const dlib::matrix<dlib::rgb_pixel>& probe_img : probe_imgs) {
+        for (unsigned int v0_idx = 0; v0_idx < pset[pid].view(0).size(); ++v0_idx) {
             ++num_probes;
+            const dlib::matrix<dlib::rgb_pixel>& probe_img = pset[pid].view(0)[v0_idx];
 
             std::vector<std::vector<std::pair<float,int>>> trials(num_trials);
-            for (int t = 0; t < num_trials; ++t) {
-                trials[t].reserve(test_protocol.size());
-            }
+            for (int t = 0; t < num_trials; ++t) trials[t].reserve(test_protocols[test_index].size());
 
-            for (unsigned int j = 0; j < test_protocol.size(); ++j) {
-                int gid = test_protocol[j];
-                const std::vector<dlib::matrix<dlib::rgb_pixel>>& gallery_imgs = pset[gid].view(1);
-
+            for (unsigned int j = 0; j < test_protocols[test_index].size(); ++j) {
+                int gid = test_protocols[test_index][j];
                 std::vector<input_type> img_pairs;
-                img_pairs.reserve(gallery_imgs.size());
-                for (const dlib::matrix<dlib::rgb_pixel>& gallery_img : gallery_imgs) {
-                    img_pairs.emplace_back(&probe_img, &gallery_img);
+                for (unsigned int v1_idx = 0; v1_idx < pset[gid].view(1).size(); ++v1_idx) {
+                    img_pairs.push_back({&probe_img, &pset[gid].view(1)[v1_idx]});
                 }
 
-                // Randomly choose one pairwise score to represent the current
-                // gallery ID
                 dlib::matrix<float> output = dlib::mat(tnet(img_pairs.begin(), img_pairs.end()));
-
                 for (auto& trial : trials) {
                     int tmp = rng.get_random_32bit_number() % output.nr();
-                    trial.emplace_back(output(tmp, 1), gid);
+                    trial.push_back(std::make_pair(output(tmp, 1), gid));
                 }
             }
 
             for (auto& trial : trials) {
-                // Sort score and ID pairs and scan for the matching ID
-                std::sort(trial.begin(), trial.end(),
-                          [](const std::pair<double,int>& i, const std::pair<double,int>& j) -> bool
-                          {
-                              return i.first > j.first;
-                          });
-
-                // Find the first occurrence of the same ID person
+                std::sort(trial.begin(), trial.end(), [](const std::pair<float,int>& a, const std::pair<float,int>& b) {
+                    return a.first > b.first;
+                });
                 for (unsigned int j = 0; j < trial.size(); ++j) {
                     if (pid == trial[j].second) {
                         ++ranked_counter[j];
@@ -303,19 +228,13 @@ int main(int argc, char* argv[]) try
         }
     }
 
-    // Calculate the cumulative match curve for this dataset.
-    dlib::matrix<double> cmc;
-    cmc.set_size(1, ranked_counter.size());
+    std::ofstream cmc_file("cmc_"+save_name+".csv");
     int accumulated_count = 0;
-
-    std::ofstream cmc_file;
-    cmc_file.open("cmc_"+save_name+".csv");
     for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
         accumulated_count += ranked_counter[i];
-        cmc(i) = static_cast<double>(accumulated_count)/(num_probes*num_trials);
-        cmc_file << cmc(i) << ((i < (ranked_counter.size()-1)) ? "," : "\n");
+        double cmc_val = (double)accumulated_count/(num_probes*num_trials);
+        cmc_file << cmc_val << ((i < (ranked_counter.size()-1)) ? "," : "\n");
     }
-    std::cout << "\nCumulative match curve saved to `cmc_cuhk03_modidla.csv`." << std::endl;
 
     return 0;
 }

@@ -1,6 +1,6 @@
 #include "difference_impl_gpu.h"
 
-#include <dlib/dnn/cuda_utils.h>
+#include <dlib/cuda/cuda_utils.h>
 
 __global__ void apply_differencing_impl(
     const float* input_tensor,

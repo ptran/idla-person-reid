@@ -1,0 +1,55 @@
+# --- Stage 1: Build ---
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libopenblas-dev \
+    libhdf5-serial-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Parameterize the GPU architecture (Default to 86 for RTX 30-series)
+ARG GPU_ARCH=86
+
+# Install dlib v20.0 with CUDA support
+WORKDIR /opt
+RUN git clone --branch v20.0 --depth 1 https://github.com/davisking/dlib.git \
+    && cd dlib && mkdir build && cd build \
+    && cmake .. \
+        -DDLIB_NO_GUI_SUPPORT=ON \
+        -DDLIB_USE_BLAS=ON \
+        -DDLIB_USE_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES=${GPU_ARCH} \
+    && make -j$(nproc) && make install
+
+# Build IDLA Project
+WORKDIR /app
+COPY . .
+RUN mkdir build && cd build \
+    && cmake .. \
+        -DGPU_ARCHITECTURE=${GPU_ARCH} \
+        -DBUILD_TEST=OFF \
+    && make -j$(nproc)
+
+# --- Stage 2: Runtime ---
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+
+# Install runtime-only dependencies
+RUN apt-get update && apt-get install -y \
+    libopenblas0 \
+    libhdf5-serial-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binaries from builder
+COPY --from=builder /app/build/run_cuhk03 .
+
+# Default command: show help
+ENTRYPOINT ["/app/run_cuhk03"]
+CMD ["-h"]
