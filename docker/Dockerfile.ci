@@ -31,11 +31,10 @@ FROM deps AS builder
 WORKDIR /app
 COPY . .
 
-# Build and verify the project
+# Build the project
 RUN mkdir build && cd build \
     && cmake .. -DBUILD_TEST=ON \
-    && make -j$(nproc) \
-    && ./test/dtest --runall
+    && make -j$(nproc)
 
 # --- Stage 3: Test (Slim CI Artifact) ---
 FROM ubuntu:24.04 AS test
