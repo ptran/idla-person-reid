@@ -102,10 +102,10 @@ int main(int argc, char* argv[]) try
     // Instantiate network and trainer FIRST to secure contiguous pinned memory 
     // before the heap is fragmented by thousands of small dataset matrices.
     net_type net;
-    dlib::dnn_trainer<net_type, dlib::sgd> trainer(net, dlib::sgd(0.0005, 0.9));
-    trainer.set_mini_batch_size(32); // Reserve buffers for 128 batch size
+    dlib::dnn_trainer<net_type, dlib::adam> trainer(net, dlib::adam(0.0005, 0.9, 0.999));
+    trainer.set_mini_batch_size(32); 
     trainer.be_verbose();
-    trainer.set_learning_rate(0.01);
+    trainer.set_learning_rate(0.001);
 
     dlib::command_line_parser parser;
     parser.add_option("i", "Directory holding the CUHK03 dataset", 1);
@@ -138,14 +138,14 @@ int main(int argc, char* argv[]) try
     load_cuhk03_dataset(cuhk03_file, pset, test_protocols, dset_type);
 
     // Set learning rate schedule
-    const unsigned long max_iterations = 80000;
+    const unsigned long max_iterations = 50000;
     const unsigned long current_iteration = trainer.get_train_one_step_calls();
 
     dlib::matrix<double,0,1> inverse_learning_rate_schedule;
     inverse_learning_rate_schedule.set_size(max_iterations-current_iteration);
 
-    double learning_rate = 0.01;
-    double gamma = 0.000025;
+    double learning_rate = 0.001;
+    double gamma = 0.0001;
     double power = 0.75;
     for (unsigned long i = current_iteration; i < max_iterations; ++i) {
         inverse_learning_rate_schedule(i-current_iteration) = learning_rate*std::pow(1.0+gamma*i, -power);
@@ -179,6 +179,62 @@ int main(int argc, char* argv[]) try
     net.clean();
     std::cout << "Saving network..." << std::endl;
     dlib::serialize(save_name+".dnn") << net;
+
+    // Evaluation
+    dlib::softmax<anet_type::subnet_type> tnet;
+    tnet.subnet() = net.subnet();
+    std::cout << "Testing network on CUHK03 testing dataset." << std::endl;
+
+    std::vector<int> ranked_counter(test_protocols[test_index].size(), 0);
+    int num_probes = 0;
+
+    const int num_trials = 100;
+    dlib::console_progress_indicator pbar(test_protocols[test_index].size());
+    for (unsigned int i = 0; i < test_protocols[test_index].size(); ++i) {
+        int pid = test_protocols[test_index][i];
+        pbar.print_status(i);
+        for (unsigned int v0_idx = 0; v0_idx < pset[pid].view(0).size(); ++v0_idx) {
+            ++num_probes;
+            const dlib::matrix<dlib::rgb_pixel>& probe_img = pset[pid].view(0)[v0_idx];
+
+            std::vector<std::vector<std::pair<float,int>>> trials(num_trials);
+            for (int t = 0; t < num_trials; ++t) trials[t].reserve(test_protocols[test_index].size());
+
+            for (unsigned int j = 0; j < test_protocols[test_index].size(); ++j) {
+                int gid = test_protocols[test_index][j];
+                std::vector<input_type> img_pairs;
+                for (unsigned int v1_idx = 0; v1_idx < pset[gid].view(1).size(); ++v1_idx) {
+                    img_pairs.push_back({&probe_img, &pset[gid].view(1)[v1_idx]});
+                }
+
+                dlib::matrix<float> output = dlib::mat(tnet(img_pairs.begin(), img_pairs.end()));
+                for (auto& trial : trials) {
+                    int tmp = rng.get_random_32bit_number() % output.nr();
+                    trial.push_back(std::make_pair(output(tmp, 1), gid));
+                }
+            }
+
+            for (auto& trial : trials) {
+                std::sort(trial.begin(), trial.end(), [](const std::pair<float,int>& a, const std::pair<float,int>& b) {
+                    return a.first > b.first;
+                });
+                for (unsigned int j = 0; j < trial.size(); ++j) {
+                    if (pid == trial[j].second) {
+                        ++ranked_counter[j];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    std::ofstream cmc_file("cmc_"+save_name+".csv");
+    int accumulated_count = 0;
+    for (unsigned int i = 0; i < ranked_counter.size(); ++i) {
+        accumulated_count += ranked_counter[i];
+        double cmc_val = (double)accumulated_count/(num_probes*num_trials);
+        cmc_file << cmc_val << ((i < (ranked_counter.size()-1)) ? "," : "\n");
+    }
 
     return 0;
 }
