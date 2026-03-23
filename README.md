@@ -43,7 +43,7 @@ To run training on the CUHK03 dataset:
 ```bash
 docker run --gpus all -it --rm \
     -v /path/to/cuhk03_data:/data \
-    -v $(pwd):/results \
+    -v $(pwd)/results:/results \
     -w /results \
     idla-train -i /data
 ```
@@ -75,7 +75,7 @@ Global contrast normalization is applied to each image at the input layer.
 - Batch normalization was added after the fully connected layer.
 
 #### Training Modifications
-- Minibatches consist of 128 image pairs, with an even split between positive and negative examples.
+- Minibatches consist of 32 image pairs, with an even split between positive and negative examples.
 - No hard negative and data augmentation were used for training.
 
 Results
