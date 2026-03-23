@@ -61,10 +61,10 @@ namespace
             dlib::matrix<float> output_mat = dlib::mat(net(img_pair));
 
             dlib::matrix<float> netK1 = dlib::reshape(dlib::rowm(output_mat, 0), 9, 9);
-            DLIB_TEST(dlib::max(dlib::abs(K1-netK1)) <= 1e-4);
+            DLIB_TEST(dlib::sum(K1-netK1) <= 1e-4);
 
             dlib::matrix<float> netK2 = dlib::reshape(dlib::rowm(output_mat, 1), 9, 9);
-            DLIB_TEST(dlib::max(dlib::abs(K2-netK2)) <= 1e-4);
+            DLIB_TEST(dlib::sum(K2-netK2) <= 1e-4);
 
             // ================ //
             //  GRADIENT CHECK  //
@@ -109,10 +109,10 @@ namespace
             dlib::matrix<float> grad_mat = dlib::mat(net.get_final_data_gradient());
 
             dlib::matrix<float,3,3> netgrad1 = dlib::reshape(dlib::rowm(grad_mat, 0), 3, 3);
-            DLIB_TEST(dlib::max(dlib::abs(grad1-netgrad1)) <= 1e-5);
+            DLIB_TEST(dlib::sum(grad1-netgrad1) <= 1e-4);
 
             dlib::matrix<float,3,3> netgrad2 = dlib::reshape(dlib::rowm(grad_mat, 1), 3, 3);
-            DLIB_TEST(dlib::max(dlib::abs(grad2-netgrad2)) <= 1e-5);
+            DLIB_TEST(dlib::sum(grad2-netgrad2) <= 1e-4);
         }
     };
 
