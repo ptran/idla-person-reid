@@ -64,4 +64,4 @@ jobs:
 
     steps:
       - name: Run Unit Tests
-        run: ./dtest --runall
+        run: /app/dtest --runall
