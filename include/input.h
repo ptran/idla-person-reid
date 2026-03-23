@@ -74,7 +74,7 @@ void input_rgb_image_pair::to_tensor(
             }
         }
 
-        // Populate data tensor
+        // Populate data tensor (Interleaved pairs: Image 1, Image 2, Image 1, Image 2...)
         for (long r = 0; r < nr; ++r) {
             for (long c = 0; c < nc; ++c) {
                 // Copy the data pointer
@@ -82,18 +82,19 @@ void input_rgb_image_pair::to_tensor(
                 dlib::rgb_pixel tmp1 = (*i->first)(r,c);
                 dlib::rgb_pixel tmp2 = (*i->second)(r,c);
 
-                *p = (static_cast<float>(tmp1.red)-stats1.mean())/(stats1.stddev()+1e-7);
-                *(p+image_offset) = (static_cast<float>(tmp2.red)-stats2.mean())/(stats2.stddev()+1e-7);
+                *p = (static_cast<float>(tmp1.red)-stats1.mean())/(stats1.stddev()+1e-7f);
+                *(p+image_offset) = (static_cast<float>(tmp2.red)-stats2.mean())/(stats2.stddev()+1e-7f);
                 p += channel_offset;
 
-                *p = (static_cast<float>(tmp1.green)-stats1.mean())/(stats1.stddev()+1e-7);
-                *(p+image_offset) = (static_cast<float>(tmp2.green)-stats2.mean())/(stats2.stddev()+1e-7);
+                *p = (static_cast<float>(tmp1.green)-stats1.mean())/(stats1.stddev()+1e-7f);
+                *(p+image_offset) = (static_cast<float>(tmp2.green)-stats2.mean())/(stats2.stddev()+1e-7f);
                 p += channel_offset;
 
-                *p = (static_cast<float>(tmp1.blue)-stats1.mean())/(stats1.stddev()+1e-7);
-                *(p+image_offset) = (static_cast<float>(tmp2.blue)-stats2.mean())/(stats2.stddev()+1e-7);
+                *p = (static_cast<float>(tmp1.blue)-stats1.mean())/(stats1.stddev()+1e-7f);
+                *(p+image_offset) = (static_cast<float>(tmp2.blue)-stats2.mean())/(stats2.stddev()+1e-7f);
             }
         }
+        // Corrected pointer arithmetic: advance by 6 channels total (3 for each of the 2 images)
         data_ptr += 5*channel_offset;
     }
 }
