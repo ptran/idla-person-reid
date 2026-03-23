@@ -8,8 +8,9 @@ Installation
 
 ### Requirements
 - **dlib** *v20.0+*
-- **CMake** *v3.13+*
+- **CMake** *v3.18+*
 - **HDF5** *v1.10+*
+  - Used for loading the `CUHK03` dataset from a *MATLAB* `mat` file.
 - **OpenBLAS**
 - **C++17**-compatible compiler
 
@@ -81,6 +82,13 @@ Global contrast normalization is applied to each image at the input layer.
 Results
 -------
 
-Below is a cumulative match curve (CMC) produced by the network implemented in this repository.
+The performance evaluation follows the protocol described in [github.com/Cysu/dgd_person_reid/blob/master/utils/cmc.py](https://github.com/Cysu/dgd_person_reid/blob/master/utils/cmc.py).
 
-<div style="text-align:center"><img src ="docs/modidla_cmc.png" /></div>
+The following results were achieved using the **Adam optimizer** (0.001 LR) after 50,000 iterations at a batch size of 32.
+
+| Dataset | Rank-1 | Rank-5 | Rank-10 |
+| :--- | :---: | :---: | :---: |
+| **Labeled (CUHK03-L)** | **56.70%** | 86.31% | 95.03% |
+| **Detected (CUHK03-D)** | **54.10%** | 84.40% | 92.44% |
+
+Currently, only `CUHK03` training and testing has been implemented (in `cuhk03.cpp`).
